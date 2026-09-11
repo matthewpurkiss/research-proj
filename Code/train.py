@@ -32,6 +32,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
+import models
+
 DATA_DIR = os.path.join("data", "processed")
 SEEDS = [0, 1, 2, 3, 4]
 
@@ -134,8 +136,10 @@ def run_multi_seed(model_fn, feature_indices=None, seeds=SEEDS, verbose=False):
 
 
 BASELINES = {
-    "lstm": ("Vanilla LSTM (univariate)", lambda: __import__("models").VanillaLSTM(input_size=1, hidden_size=64), [0]),
-    "gru": ("Vanilla GRU (univariate)", lambda: __import__("models").VanillaGRU(input_size=1, hidden_size=74), [0]),
+    "lstm": ("Vanilla LSTM (univariate)", lambda: models.VanillaLSTM(input_size=1, hidden_size=64), [0]),
+    "gru": ("Vanilla GRU (univariate)", lambda: models.VanillaGRU(input_size=1, hidden_size=74), [0]),
+    "bilstm": ("Standard Bi-LSTM (multivariate, no attention)", lambda: models.StandardBiLSTM(input_size=19, hidden_size=64), None),
+    "alpha": ("Alpha Agent (attention-augmented multivariate Bi-LSTM)", lambda: models.AlphaAgent(input_size=19, hidden_size=64), None),
 }
 
 

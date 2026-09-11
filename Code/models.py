@@ -10,6 +10,7 @@ provides.
 Each class here is one architecture from Section 5.6.1 of the proposal.
 """
 
+import torch
 import torch.nn as nn
 
 
@@ -56,3 +57,78 @@ class VanillaGRU(nn.Module):
         out, _ = self.gru(x)
         last_step = out[:, -1, :]
         return self.head(last_step).squeeze(-1)
+
+
+class StandardBiLSTM(nn.Module):
+    """Section 5.6.1: two-layer Bi-LSTM without attention, on the full
+    19-feature vector - isolates what the Alpha Agent's self-attention
+    layer specifically contributes (H2). Matches the Alpha Agent's own
+    Bi-LSTM stack hyperparameters (Section 5.2): 2 stacked bidirectional
+    layers, 64 hidden units per direction, dropout 0.2 between layers.
+
+    Uses the final hidden state from each direction (h_n), not the
+    output at the last time step (out[:, -1, :]). For a bidirectional
+    LSTM those are NOT the same thing: the backward direction processes
+    the sequence in reverse, so its output at the *last* time step has
+    only just started (seen one step), while its entry in h_n is its
+    state after genuinely processing the whole sequence backward. Using
+    out[:, -1, :] would silently hand the backward half of the model
+    almost no context.
+    """
+
+    def __init__(self, input_size=19, hidden_size=64, num_layers=2, dropout=0.2):
+        super().__init__()
+        self.lstm = nn.LSTM(
+            input_size, hidden_size, num_layers=num_layers,
+            batch_first=True, bidirectional=True, dropout=dropout,
+        )
+        self.head = nn.Linear(hidden_size * 2, 1)
+
+    def forward(self, x):
+        _, (h_n, _) = self.lstm(x)
+        # h_n: (num_layers * 2, batch, hidden_size). The last layer's
+        # forward and backward final states are the last two entries.
+        forward_final = h_n[-2]
+        backward_final = h_n[-1]
+        combined = torch.cat([forward_final, backward_final], dim=-1)
+        return self.head(combined).squeeze(-1)
+
+
+class AlphaAgent(nn.Module):
+    """Section 5.2: the real model. Same Bi-LSTM stack as
+    StandardBiLSTM (2 layers, 64 units/direction, dropout 0.2) -
+    deliberately identical, since H2 is specifically about isolating
+    what self-attention adds on top of that stack, not about a
+    different stack as well. The only architectural difference from
+    StandardBiLSTM is what happens after the LSTM: a self-attention
+    layer over the full 60-step output sequence, instead of just using
+    the stack's own final hidden state.
+
+    Scaled dot-product self-attention (Vaswani et al.), single head, via
+    nn.MultiheadAttention. Query = the Bi-LSTM's output at the LAST time
+    step only (today - the vantage point the forecast is made from).
+    Keys/values = the full 60-step output sequence. This lets today's
+    forecast pull in whichever of the 60 days is most relevant, rather
+    than only what survived being compressed into the recurrent state
+    by the time processing reaches today - exactly the "instead of
+    relying solely on the final hidden state" framing in Section 5.2.
+    """
+
+    def __init__(self, input_size=19, hidden_size=64, num_layers=2, dropout=0.2, num_heads=1):
+        super().__init__()
+        self.lstm = nn.LSTM(
+            input_size, hidden_size, num_layers=num_layers,
+            batch_first=True, bidirectional=True, dropout=dropout,
+        )
+        attn_dim = hidden_size * 2
+        self.attention = nn.MultiheadAttention(
+            embed_dim=attn_dim, num_heads=num_heads, batch_first=True,
+        )
+        self.head = nn.Linear(attn_dim, 1)
+
+    def forward(self, x):
+        out, _ = self.lstm(x)              # (batch, 60, hidden*2)
+        query = out[:, -1:, :]             # (batch, 1, hidden*2) - "today"
+        attn_out, _ = self.attention(query, out, out)
+        summary = attn_out.squeeze(1)      # (batch, hidden*2)
+        return self.head(summary).squeeze(-1)
