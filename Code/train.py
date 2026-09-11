@@ -129,16 +129,26 @@ def _rmse(model, X, y):
 
 def run_multi_seed(model_fn, feature_indices=None, seeds=SEEDS, verbose=False):
     """Trains model_fn() across every seed in `seeds` and reports test
-    RMSE as mean +/- std, per Section 5.5's reproducibility requirement."""
-    rmses = []
-    for seed in seeds:
-        _, test_rmse, _, _ = train_one_seed(model_fn, seed, feature_indices, verbose=verbose)
-        rmses.append(test_rmse)
-        print(f"seed {seed}: test RMSE (log-return) = {test_rmse:.5f}")
+    RMSE (on log-return) and MAPE (on the price reconstructed from that
+    log-return, per metrics.py - comparable to Seabe et al.'s Table 2.1)
+    as mean +/- std, per Section 5.5's reproducibility requirement."""
+    import metrics
 
-    rmses = np.array(rmses)
-    print(f"\nmean +/- std across {len(seeds)} seeds: {rmses.mean():.5f} +/- {rmses.std():.5f}")
-    return rmses
+    btc_close = metrics.load_btc_close()
+    end_dates = metrics.load_test_end_dates("alpha")
+
+    rmses, mapes = [], []
+    for seed in seeds:
+        _, test_rmse, test_pred, test_y = train_one_seed(model_fn, seed, feature_indices, verbose=verbose)
+        mape = metrics.mape_on_reconstructed_price(end_dates, test_pred, test_y, btc_close)
+        rmses.append(test_rmse)
+        mapes.append(mape)
+        print(f"seed {seed}: test RMSE (log-return) = {test_rmse:.5f}  MAPE (price) = {mape:.4f}%")
+
+    rmses, mapes = np.array(rmses), np.array(mapes)
+    print(f"\nRMSE mean +/- std across {len(seeds)} seeds: {rmses.mean():.5f} +/- {rmses.std():.5f}")
+    print(f"MAPE mean +/- std across {len(seeds)} seeds: {mapes.mean():.4f}% +/- {mapes.std():.4f}%")
+    return rmses, mapes
 
 
 BASELINES = {
