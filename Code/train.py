@@ -60,7 +60,9 @@ def load_alpha_split(split, feature_indices=None):
 def train_one_seed(model_fn, seed, feature_indices=None, max_epochs=100,
                     patience=10, lr_patience=5, batch_size=64, verbose=False):
     """Trains one instance of model_fn() for one seed, using early
-    stopping on validation RMSE. Returns (trained_model, test_rmse)."""
+    stopping on validation RMSE. Returns (trained_model, test_rmse,
+    test_pred, test_y) - the per-day predictions and actuals are what
+    the Diebold-Mariano test needs, not just the aggregate RMSE."""
     set_seed(seed)
 
     train_X, train_y = load_alpha_split("train", feature_indices)
@@ -110,15 +112,19 @@ def train_one_seed(model_fn, seed, feature_indices=None, max_epochs=100,
             break
 
     model.load_state_dict(best_state)
-    test_rmse = _rmse(model, test_X, test_y)
-    return model, test_rmse
+    test_pred = _predict(model, test_X)
+    test_rmse = torch.sqrt(torch.mean((test_pred - test_y) ** 2)).item()
+    return model, test_rmse, test_pred.numpy(), test_y.numpy()
 
 
 @torch.no_grad()
-def _rmse(model, X, y):
+def _predict(model, X):
     model.eval()
-    pred = model(X.to(DEVICE)).cpu()
-    return torch.sqrt(torch.mean((pred - y) ** 2)).item()
+    return model(X.to(DEVICE)).cpu()
+
+
+def _rmse(model, X, y):
+    return torch.sqrt(torch.mean((_predict(model, X) - y) ** 2)).item()
 
 
 def run_multi_seed(model_fn, feature_indices=None, seeds=SEEDS, verbose=False):
@@ -126,7 +132,7 @@ def run_multi_seed(model_fn, feature_indices=None, seeds=SEEDS, verbose=False):
     RMSE as mean +/- std, per Section 5.5's reproducibility requirement."""
     rmses = []
     for seed in seeds:
-        _, test_rmse = train_one_seed(model_fn, seed, feature_indices, verbose=verbose)
+        _, test_rmse, _, _ = train_one_seed(model_fn, seed, feature_indices, verbose=verbose)
         rmses.append(test_rmse)
         print(f"seed {seed}: test RMSE (log-return) = {test_rmse:.5f}")
 
