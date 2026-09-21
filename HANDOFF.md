@@ -326,17 +326,32 @@ fair tests of H2 specifically.
 ### MAPE (Section 5.6.2, comparable to Seabe et al. Table 2.1)
 Predictions are log-returns; MAPE needs price, so `metrics.py` reconstructs
 `P_hat(t+1) = P(t) * exp(predicted_log_return)` before computing MAPE.
-**Important finding:** LSTM's MAPE (1.7755% ± 0.0053%) is nearly identical to a naive
-"predict no change" baseline (1.7849%) - confirms MAPE looks artificially good on
-near-random-walk series (consistent with the -1.055 persistence R² from Phase 1 EDA).
-**RMSE + DM test remain the real basis for conclusions, MAPE is reported only for
-literature comparability.**
 
-**Still open in Phase 2 (minor, noted in PHASE2_SUMMARY.pdf):** MAPE has only been
-computed for the LSTM baseline. GRU, Standard Bi-LSTM, and Alpha Agent still need
-their MAPE gathered (the code in `train.py`'s `run_multi_seed` already supports this
-for any model - just needs running: `python3 train.py --model gru` etc., now prints
-MAPE automatically alongside RMSE).
+**Full MAPE table, confirmed 2026-09-21** (naive "predict no change" baseline:
+**1.7849%**):
+| Model | MAPE (5-seed mean ± std) |
+|---|---|
+| VanillaLSTM | 1.7755% ± 0.0053% |
+| VanillaGRU | 1.7829% ± 0.0166% |
+| StandardBiLSTM | 2.1037% ± 0.4328% |
+| AlphaAgent | 1.8160% ± 0.0421% |
+
+**Important finding, confirmed across all four models now, not just LSTM:** every
+model's MAPE sits close to the naive baseline (1.78-1.82%), except StandardBiLSTM
+(2.10%) - which is *worse* than doing nothing, driven by the same seed instability
+already noted under H2 (one Bi-LSTM seed got stuck in a bad local optimum, RMSE
+0.0356 - visible here too as that seed's individually much higher MAPE, 2.96%, pulling
+the mean up and the std wide). This confirms the Phase 1 EDA's near-random-walk
+finding (-1.055 persistence R²) holds across every architecture tested, not just the
+one originally checked. **RMSE + DM test remain the real basis for conclusions, MAPE
+is reported only for literature comparability - this table doesn't change any
+existing H1/H2 conclusion**, it just closes out the comparability table for the
+write-up.
+
+Phase 2's MAPE loose end is now fully closed - `PHASE2_SUMMARY.pdf` still only shows
+the LSTM row and would need regenerating to include the full table above if that
+matters for the final write-up (its generator script was discarded, same convention
+as Phase 3's; a new one would need writing if this is wanted).
 
 ## Phase 3 status: IN PROGRESS (Beta Agent, Weeks 9-11)
 
@@ -472,9 +487,9 @@ genuinely blocked on that conversation's outcome.
    GARCH comparison~~ DONE (`skill_scores.py`). ~~Investigate finding 1 further~~ DONE -
    full 5-variant investigation (delta target, GARCH feature, combined, controlled
    comparison), see finding 1's status above. ~~Gather MAPE for GRU/Bi-LSTM/Alpha
-   Agent~~ still open, see Phase 2's "still open" note - quick, code already supports
-   it (`python3 train.py --model gru` etc.), just needs running and isn't blocking
-   anything else. ~~Write a Phase 3 summary~~ DONE (`PHASE3_SUMMARY.pdf`).
+   Agent~~ DONE (2026-09-21) - full table now in Phase 2's MAPE section above;
+   confirms the near-random-walk finding holds across all four models, doesn't
+   change any H1/H2 conclusion. ~~Write a Phase 3 summary~~ DONE (`PHASE3_SUMMARY.pdf`).
 2. Have the Van Alten conversation on finding 1 (lead with the full investigation
    above - multiple framings tested, the delta-target reframing is the best fix
    found, the residual gap is explained by real volatility clustering) and raise
