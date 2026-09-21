@@ -59,6 +59,19 @@ def compute_pos_weight(y_jump_train):
     return (1 - rate) / rate
 
 
+def naive_jump_bce(train_jump, eval_jump, pos_weight):
+    """BCE of always predicting the training set's base rate for every
+    single day, regardless of input - the same idea as the MAPE
+    naive-baseline check in train.py/metrics.py, applied to the jump
+    head. If the trained model's BCE isn't meaningfully better than
+    this, it hasn't learned anything beyond the class prior."""
+    base_rate = train_jump.mean().item()
+    logit_value = float(np.log(base_rate / (1 - base_rate)))
+    constant_logits = torch.full_like(eval_jump, logit_value)
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    return loss_fn(constant_logits, eval_jump).item()
+
+
 @torch.no_grad()
 def _eval(model, X, vol_y, jump_y, jump_loss_fn):
     """Returns (vol_mse, jump_bce, pred_vol, pred_jump_prob) on the given
@@ -183,6 +196,13 @@ def run_multi_seed(seeds=SEEDS, verbose=False, **kwargs):
     vol_rmses, jump_bces = np.array(vol_rmses), np.array(jump_bces)
     print(f"\nvol RMSE mean +/- std: {vol_rmses.mean():.5f} +/- {vol_rmses.std():.5f}")
     print(f"jump BCE mean +/- std: {jump_bces.mean():.4f} +/- {jump_bces.std():.4f}")
+
+    _, _, train_jump = load_beta_split("train")
+    _, _, test_jump = load_beta_split("test")
+    pos_weight = torch.tensor(compute_pos_weight(train_jump), device=DEVICE)
+    naive_bce = naive_jump_bce(train_jump, test_jump.to(DEVICE), pos_weight)
+    print(f"naive baseline (always predict the {train_jump.mean().item():.4%} base rate): jump BCE={naive_bce:.4f}")
+
     return vol_rmses, jump_bces
 
 
