@@ -1,0 +1,307 @@
+# Project Handoff Document
+
+Written 2026-09-21 to let a new Claude session (or another LLM/account) continue this
+project with full context, either for more coding or for helping write the final
+research report. Read this whole file before doing anything else in this project.
+
+## Project identity
+
+- **Title:** A Decoupled Attention-Based Bi-LSTM Framework with Volatility-Aware Risk
+  Management for AI-Driven CFD Cryptocurrency Trading
+- **Student:** Matthew Purkiss, 2697424
+- **Supervisor:** Clint Van Alten
+- **Institution:** School of Computer Science & Applied Mathematics, University of the
+  Witwatersrand. BSc Honours, 40% of final mark, oral defence in Week 20.
+- **Project timeline:** 20 weeks, started 19 July 2026. Phase 1 = Weeks 1-3, Phase 2 =
+  Weeks 4-8, Phase 3 = Weeks 9-11 (current phase, in progress as of this document).
+- **GitHub repo:** https://github.com/matthewpurkiss/research-proj (private)
+
+## Folder structure
+
+```
+Research_Proj/                          <- repo root
+  Matthew_Purkiss_research_proposal.pdf <- THE key source document, cite section numbers from this
+  Matthew_Purkiss_Lit_Review.pdf
+  Annotated_Bibliography_2697424.pdf
+  Phase1_Progress.pptx                  <- supervisor slide deck, Phase 1
+  HANDOFF.md                            <- this file
+  Code/
+    CLAUDE.md              <- project rules/conventions, READ THIS TOO
+    PHASE1_SPEC.md          <- detailed Phase 1 spec, still useful reference
+    README.md               <- Phase 1 install/run-order/findings doc
+    PHASE2_SUMMARY.pdf       <- formal Phase 2 results summary
+    config.py, fetch_data.py, build_dataset.py, splits.py,
+    leakage_audit.py, test_audit_teeth.py, make_synthetic.py,
+    run_pipeline.py, check_connectivity.py, eda.ipynb   <- Phase 1 pipeline (all done)
+    models.py, train.py, evaluate.py, metrics.py         <- Phase 2 (all done)
+    train_beta.py, garch_baseline.py                     <- Phase 3 (in progress)
+    data/raw/       <- real fetched CSVs (immutable, frozen 2026-09-21 fetch)
+    data/processed/ <- aligned_dataset.csv, train/val/test.csv, *_windows.npz, scaler_params.csv
+```
+
+**`Code/CLAUDE.md` is the authoritative rules file for this project** - read it fully
+before writing more code. Key non-negotiables it states: never fabricate a number,
+leakage is the primary risk, prefer clear code over clever code (every line must be
+explainable at defence), work section by section, explain before implementing.
+
+## How the student likes to work (from memory files, confirmed repeatedly)
+
+1. **The student commits their own code.** Claude writes/edits files and gives the
+   exact `git add` / `git commit` / `git push` commands, but does not run them.
+   Exception: the very first repo-setup commit was Claude's.
+2. **The student runs all scripts/training themselves** and pastes the output back.
+   Claude writes code, explains what to expect, and does NOT execute training runs or
+   pipeline scripts via Bash. (Claude may run small, quick self-verification checks of
+   its own new code before handing it off - e.g. confirming a new function's output
+   shape - but the "real" recorded run is always the student's own.)
+3. **Explain before implementing.** For any non-trivial concept or design decision,
+   explain it in plain English first, confirm understanding, then write code.
+4. Work section by section - don't dump multiple files/features unrequested.
+5. The student prefers concise, direct answers.
+
+## Critical unresolved issue: AI declaration
+
+The submitted research proposal's AI Declaration page has **box 6 ("Code
+Development") and box 3 ("Methods and Experiment Design") NOT checked**, but this
+entire project (Phase 1 and Phase 2 pipelines, Phase 3 in progress) has been built
+with extensive Claude assistance, including real methodological decisions (e.g. the
+finding-1 resolution below). The student's position (stated explicitly): the checked
+proposal declaration only covered the proposal document itself, and they will check
+the correct boxes on the final thesis/report's own AI declaration. **Whoever continues
+this project should be aware this is still an open item the student needs to handle
+correctly at final submission - do not let it be forgotten.**
+
+## Phase 1 status: COMPLETE
+
+All 10 files from `PHASE1_SPEC.md` built, tested, and verified against real data.
+Leakage audit: **9/9 checks pass**. Mutation test (`test_audit_teeth.py`): **5/5
+faults caught**.
+
+### Key config values (see `config.py` for authoritative source)
+- Data range: 2018-01-01 to 2025-12-31 (raw fetch), usable range after warm-up trim:
+  **2018-02-12 to 2025-12-30**
+- Splits: train 2018-01-01/2023-12-31, val 2024, test 2025
+- Tickers: BTC-USD, ETH-USD, ^GSPC, GC=F, DX-Y.NYB, ^VIX (Yahoo); 6 Blockchain.com
+  charts (active addresses, hash rate, tx count, mempool size, miner revenue,
+  difficulty)
+- `WARMUP_TRIM_DAYS = 30` (longest rolling window: 30-day correlation / jump
+  threshold)
+- `ALPHA_LOOKBACK = 60`, `BETA_LOOKBACK = 30`
+- **d = 19 features**, pinned order in `config.FEATURE_ORDER`: 6 log-returns (BTC,
+  ETH, SP500, Gold, DXY, VIX) + BTC realised vol (14d) + 3 rolling correlations (30d,
+  BTC vs ETH/SP500/Gold) + 6 on-chain 7d rate-of-change + 3 log-volumes (BTC, ETH,
+  SP500)
+- 3 targets per row: `alpha_target` (next-day BTC log-return), `beta_target_vol`
+  (next-day 14d trailing realised vol), `beta_target_jump` (next-day binary jump
+  label, 3-std-of-trailing-30d threshold)
+
+### Real data-quality bugs found and fixed (not in original spec)
+1. `yfinance`'s `end` parameter is exclusive - every Yahoo series silently dropped the
+   last day. Fixed in `fetch_data.py` by requesting one day past `DATA_END`.
+2. 2018-01-01 is a real market holiday AND the first day of the dataset, so
+   forward-fill has nothing to reach back to. Fixed with a backfill capped at 3 rows
+   in `build_dataset.py`.
+3. SP500 reported `Volume = 0` on 2023-05-24, causing `log(0) = -inf`. Treated as a
+   data error, imputed like any other gap.
+4. Blockchain.com's Charts API silently downsamples long date ranges unless
+   `sampled=false` is passed (confirmed: 729 points instead of ~2900 for an 8-year
+   request without it). Fixed in `fetch_data.py`.
+5. On-chain data has small persistent gaps (a 3-day outage across 4 metrics in Nov
+   2025, 3 isolated single-day gaps in 2019-2020). Forward-filled, capped at
+   `MAX_CHAIN_GAP_ROWS=20` so a real fetch problem would still fail loudly.
+
+### Important: the "fake data" incident
+Early in Phase 1, `fetch_data.py` succeeded with zero errors but returned **data that
+was not real** (BTC-ETH correlation ~0.01 instead of ~0.8, BTC price on its actual
+all-time-high date off by 5x). Caught by cross-referencing known historical price
+landmarks, not by any automated check. A second fetch returned genuine data,
+cross-verified against Statmuse. **Lesson for whoever continues this: fetch success
+(HTTP 200, no exceptions) does not guarantee real data - sanity-check against known
+values when in doubt.** The current `data/raw` is confirmed real (frozen 2026-09-21).
+
+### The synthetic-data guard (3 layers, all required together)
+1. `run_pipeline.py --synthetic` writes `data/raw/SYNTHETIC_DATA_DO_NOT_TRUST.txt`
+2. `build_dataset.py` prints a loud banner whenever that marker exists
+3. A bare `run_pipeline.py` run refuses to proceed while the marker exists
+
+### EDA results (from `eda.ipynb`, on the corrected real data)
+- ADF: BTC price level non-stationary (p=0.75), log-return stationary (p≈0) -
+  justifies the log-return target
+- Jump base rate: 2.48% overall (train 2.67%, val 2.67%, test 1.15%)
+- Persistence R²: **volatility target = 0.917** (this is open finding 1, see below),
+  alpha/return target = -1.055 (expected for a near-unpredictable series, not a bug -
+  see conversation for the math explanation)
+- Correlation sanity checks (only visible once data was corrected): BTC-ETH return
+  correlation 0.82, SP500-VIX -0.74 (textbook "fear" relationship)
+
+### The four open findings from `PHASE1_SPEC.md`
+1. **Volatility target overlap** - `beta_target_vol` structurally overlaps 13/14 days
+   with its own input feature `btc_realised_vol_14d`, causing artificially high
+   persistence R² (0.917). **DECISION MADE (2026-09-21): going with option 2** -
+   report skill scores against both the persistence baseline AND a GARCH(1,1) fit
+   (already built, see Phase 3 below), rather than option 3 (redefining the target,
+   which would ripple into the Dynamic Risk Engine's design in Phase 4). **This
+   decision has NOT yet been formally confirmed with Van Alten** - the student's
+   stated plan is to raise it next time they meet in person, proceeding under option 2
+   in the meantime, willing to change if he prefers option 3. Whoever continues this
+   project should check whether that conversation has happened and whether the
+   decision still stands.
+2. **Jump base rate** - measured, 2.48% (see EDA above). Used to compute
+   `BCEWithLogitsLoss`'s `pos_weight` for the Beta Agent's jump head (computed exactly
+   from the actual training window's rate at runtime, not hardcoded - see
+   `train_beta.py`'s `compute_pos_weight`).
+3. **Effective start date** - measured, 2018-02-12 (not 2018-01-01 as Chapter 3
+   currently states). **Chapter 3 of the proposal still needs correcting to reflect
+   this** before final submission.
+4. **Proposal text contradiction** - Section 5.1/H1 say "closing price," Section 5.2
+   and the actual code use log-return (log-return is correct). **Proposal text still
+   needs correcting.** Not yet raised with Van Alten as far as this conversation
+   shows.
+
+### Freeze protocol: NOT YET DONE
+Per `PHASE1_SPEC.md`, once satisfied, `data/processed/` should be copied to a
+read-only location and the fetch date + package versions recorded. **This has not
+happened yet** - still pending until findings 1 and 4 are resolved with Van Alten,
+since finding 1's resolution could still change `build_dataset.py`'s output.
+Fetch date so far: 2026-09-21 (most recent corrected fetch).
+
+## Phase 2 status: COMPLETE (see `Code/PHASE2_SUMMARY.pdf` for the full formal writeup)
+
+Four models built in `models.py`, trained via `train.py`, all using the Section 5.5
+recipe: Adam (lr=1e-3, betas=(0.9,0.999)), batch 64, early stopping after 10 stagnant
+epochs, LR halved after 5 stagnant epochs, gradient clipping at norm 1.0, 5 fixed
+seeds (0-4).
+
+| Model | Architecture | Input | Test RMSE (log-return) |
+|---|---|---|---|
+| `VanillaLSTM` | 1 layer, 64 units | Univariate (BTC log-return) | 0.02337 ± 0.00005 |
+| `VanillaGRU` | 1 layer, 74 units (param-matched to LSTM) | Univariate | 0.02348 ± 0.00019 |
+| `StandardBiLSTM` | 2 stacked bidirectional layers, 64 units/direction, dropout 0.2 | Multivariate (19 features) | 0.02689 ± 0.00445 |
+| `AlphaAgent` | Same Bi-LSTM stack + single-head self-attention (query = last timestep, keys/values = full 60-step sequence) | Multivariate | 0.02372 ± 0.00051 |
+
+Important implementation note: `StandardBiLSTM` uses `h_n` (final per-direction hidden
+state), NOT `out[:, -1, :]`, for pooling - the backward direction's output at the last
+timestep has barely started, not actually seen the whole sequence backward. Using
+`out[:, -1, :]` would be a real bug. See the class docstring in `models.py`.
+
+### H1 (multivariate beats univariate) - clean test
+Used `StandardBiLSTM` on 19 features vs. the same architecture on BTC log-return
+alone (architecture held fixed, isolates the input variable cleanly - the
+Alpha-vs-LSTM comparison is NOT a clean H1 test since architectures differ too).
+Multivariate 0.02689 ± 0.00445 vs univariate 0.03355 ± 0.00983. DM test: 4/5 seeds
+significant, but **split 2-2 in direction** (not one-sided). **Conclusion to write up:
+"directionally supported on average, not a clean/uniform result" - not "H1
+confirmed."**
+
+### H2 (attention beats vanilla Bi-LSTM) - clean test
+Alpha Agent vs Standard Bi-LSTM (identical multivariate inputs). 2/5 seeds
+significant, BOTH favouring Alpha Agent, and both are the seeds where Bi-LSTM itself
+suffered training instability (one Bi-LSTM seed got stuck in a bad local optimum,
+RMSE 0.0356, confirmed via a per-epoch diagnostic showing pure noise with no
+improvement trend - a known risk of deeper RNNs on a small dataset, not a bug).
+**Conclusion: attention gives a real, significant advantage specifically in
+unstable-training scenarios, and a small non-significant edge otherwise.**
+
+Secondary (non-clean, informational only) comparisons also run: Alpha vs LSTM (2/5
+significant, both favouring LSTM), Alpha vs GRU (1/5 significant, favouring GRU) -
+both carry the caveat that LSTM/GRU are univariate and much simpler, so these aren't
+fair tests of H2 specifically.
+
+### MAPE (Section 5.6.2, comparable to Seabe et al. Table 2.1)
+Predictions are log-returns; MAPE needs price, so `metrics.py` reconstructs
+`P_hat(t+1) = P(t) * exp(predicted_log_return)` before computing MAPE.
+**Important finding:** LSTM's MAPE (1.7755% ± 0.0053%) is nearly identical to a naive
+"predict no change" baseline (1.7849%) - confirms MAPE looks artificially good on
+near-random-walk series (consistent with the -1.055 persistence R² from Phase 1 EDA).
+**RMSE + DM test remain the real basis for conclusions, MAPE is reported only for
+literature comparability.**
+
+**Still open in Phase 2 (minor, noted in PHASE2_SUMMARY.pdf):** MAPE has only been
+computed for the LSTM baseline. GRU, Standard Bi-LSTM, and Alpha Agent still need
+their MAPE gathered (the code in `train.py`'s `run_multi_seed` already supports this
+for any model - just needs running: `python3 train.py --model gru` etc., now prints
+MAPE automatically alongside RMSE).
+
+## Phase 3 status: IN PROGRESS (Beta Agent, Weeks 9-11)
+
+### What's built and verified
+- **`BetaAgent` class** in `models.py`: single GRU (32 units), 30-day lookback
+  (`BETA_LOOKBACK`), dual output head - volatility via softplus (always positive),
+  jump-risk via a RAW logit (deliberately not sigmoid-applied in `forward()` - train
+  with `BCEWithLogitsLoss` directly on the logit for numerical stability; apply
+  `torch.sigmoid()` only when an actual probability is needed).
+- **`train_beta.py`**: separate training harness from `train.py` (dual loss: MSE for
+  volatility + weighted BCE for jump, `jump_loss_weight=0.01` currently, a rough
+  starting point not a carefully tuned value - both loss components print separately
+  every epoch to make the real relative scale visible).
+  - **Real bug found and fixed:** checkpoint selection based on `val_jump_bce` alone
+    (chosen because volatility loss collapses almost immediately - itself a live
+    demonstration of finding 1's overlap - so vol shouldn't drive checkpoint choice)
+    could pick a very early, undertrained epoch if `jump_bce` had a lucky noisy dip
+    before patience ran out. One seed kept epoch-0 weights and scored 0.47 test vol
+    RMSE instead of ~0.02. **Fixed with `min_epochs=20`** - a warm-up floor before
+    early stopping is allowed to trigger at all.
+  - Current results (5 seeds, after the fix): **vol RMSE 0.01980 ± 0.00271, jump BCE
+    1.3953 ± 0.1472**.
+  - Naive jump baseline added (`naive_jump_bce` function, permanent in
+    `run_multi_seed`'s reporting): always predicting the training base rate (2.72%)
+    scores BCE **1.6995** - the trained model beats this on **all 5 seeds**, genuine
+    evidence the jump head learned something beyond the class prior.
+- **`garch_baseline.py`**: GARCH(1,1) fit on training BTC log-returns only, one-step-
+  ahead forecasts rolled through val/test using those FIXED parameters (no refitting)
+  against the real expanding return history. Compared against next-day's absolute
+  return (standard realised-vol proxy), deliberately NOT forced to match the Beta
+  Agent's exact 14-day trailing target definition (agreed as acceptable simplification
+  for a "sanity check," not a headline comparison). Converged cleanly:
+  `alpha[1]+beta[1]=0.908` (healthy, stationary). **Validation RMSE=0.02752, test
+  RMSE=0.02220.**
+
+### What's still open in Phase 3
+1. **Calibration check** - not yet built. Plan agreed: pool predictions across all 5
+   seeds' test runs (~1300 instances from 260 real test days) rather than one seed,
+   use coarse/few buckets given the real data constraint below, NOT a fine-grained
+   reliability diagram.
+2. **No statistical significance test yet for Beta Agent vs GARCH** - currently just
+   two RMSE numbers sitting next to each other, no DM-test-equivalent rigor applied
+   yet (unlike Phase 2's Alpha Agent evaluation).
+3. **Data-scarcity caveat identified, not yet written up anywhere formal:** the test
+   set has only ~260 days at a 2.7% jump base rate = **~7 actual jump days in the
+   entire test set**. Too few for fine-grained per-class metrics (precision/recall
+   curves, confusion matrices, granular calibration bins). This is NOT a bug or a
+   split-sizing mistake - it's inherent to combining a short (1-year) test period with
+   a rare target event, and the 1-year test period is already an explicitly disclosed
+   limitation in the proposal's own Chapter 7 conclusion. Do not restructure the
+   splits to fix this - the tradeoffs aren't obviously better and it would ripple
+   through everything already built/audited.
+4. **Van Alten conversation on finding 1** - still pending (see above).
+5. No Phase 3 summary PDF built yet (unlike Phase 1's README.md and Phase 2's
+   PHASE2_SUMMARY.pdf) - worth doing once the above items are closed out.
+6. Phase 3 also needs (per `PHASE1_SPEC.md`'s proposal Chapter 6.1.3, not yet started):
+   nothing else structurally - the three deliverables listed there (trained Beta
+   Agent, calibrated forecasts, GARCH verification) are the ones tracked above.
+
+## Immediate next steps, in likely order
+
+1. Build the calibration check (pooled across seeds, coarse buckets)
+2. Add statistical rigor to the Beta Agent vs GARCH comparison
+3. Gather MAPE for GRU/Bi-LSTM/Alpha Agent (Phase 2 loose end, quick - code already
+   supports it)
+4. Have the Van Alten conversation on finding 1 (and raise finding 4 - proposal text
+   contradiction - at the same time, and correct Chapter 3's start-date claim)
+5. Once findings 1 and 4 are settled: run the freeze protocol on `data/processed/`
+6. Write a Phase 3 summary (mirroring `PHASE2_SUMMARY.pdf`)
+7. Move to Phase 4 (Dynamic Risk Engine, Weeks 12-13) - not started, not discussed in
+   detail yet beyond what's in the proposal itself
+
+## Working conventions worth preserving
+
+- One file, one job (see the whole Phase 1 file layout for the pattern)
+- Every non-obvious design choice gets a comment explaining WHY, not just what
+- Real bugs found during testing get documented in commit messages, not silently
+  fixed and forgotten
+- Never fabricate a number - if something isn't measured, say so and stop
+- Diebold-Mariano test used throughout for "is this difference real" questions, not
+  just eyeballing which mean is smaller
+- Naive-baseline checks (MAPE vs "predict no change", jump BCE vs "predict base
+  rate") have repeatedly caught metrics that looked good but weren't - keep doing this
+  for any new metric introduced
