@@ -24,6 +24,7 @@ Research_Proj/                          <- repo root
   Matthew_Purkiss_Lit_Review.pdf
   Annotated_Bibliography_2697424.pdf
   Phase1_Progress.pptx                  <- supervisor slide deck, Phase 1
+  PHASE3_SUMMARY.pdf                    <- formal Phase 3 results summary
   HANDOFF.md                            <- this file
   Code/
     CLAUDE.md              <- project rules/conventions, READ THIS TOO
@@ -34,7 +35,10 @@ Research_Proj/                          <- repo root
     leakage_audit.py, test_audit_teeth.py, make_synthetic.py,
     run_pipeline.py, check_connectivity.py, eda.ipynb   <- Phase 1 pipeline (all done)
     models.py, train.py, evaluate.py, metrics.py         <- Phase 2 (all done)
-    train_beta.py, garch_baseline.py                     <- Phase 3 (in progress)
+    train_beta.py, garch_baseline.py, skill_scores.py     <- Phase 3 (in progress)
+    diagnose_beta_vol.py, experiment_delta_vol.py,
+    experiment_garch_feature.py, experiment_combined.py,
+    experiment_delta_restricted.py    <- throwaway finding-1 investigation, all done
     data/raw/       <- real fetched CSVs (immutable, frozen 2026-09-21 fetch)
     data/processed/ <- aligned_dataset.csv, train/val/test.csv, *_windows.npz, scaler_params.csv
 ```
@@ -146,6 +150,118 @@ values when in doubt.** The current `data/raw` is confirmed real (frozen 2026-09
    in the meantime, willing to change if he prefers option 3. Whoever continues this
    project should check whether that conversation has happened and whether the
    decision still stands.
+
+   **UPDATE (2026-09-21), and this raises the urgency of that conversation:** running
+   `skill_scores.py` (option 2's actual implementation) produced a stark result. Naive
+   persistence RMSE on the volatility target = **0.00229**; Beta Agent RMSE = **0.01980
+   ± 0.00271** - the trained model is roughly **9x worse than doing nothing**, on all 5
+   seeds, confirmed by a proper DM test (p≈0.0000 every seed, since this IS a same-target
+   comparison - see below). This is not a bug; both numbers were independently checked.
+   The mechanism: because 13/14 days of the rolling window are shared between
+   consecutive rows, the target barely moves day to day, so "predict yesterday's value"
+   is nearly perfect *by construction of the window*, not because persistence is a good
+   model. The Beta Agent, trained to regress the target's absolute level, doesn't even
+   match that trivial carry-forward. **Practical implication: as currently framed
+   (predicting the absolute level of a slow-moving rolling statistic), the Beta Agent's
+   volatility head has no demonstrated forecasting value over doing nothing.** This is
+   a genuinely strong argument for option 3 (redefine the target - e.g. predict the
+   day-over-day *change* in volatility, or use a shorter/non-overlapping window) when
+   this gets raised with Van Alten, not just a methodological footnote anymore.
+
+   **Option B tested (2026-09-21), `experiment_delta_vol.py` - THROWAWAY, not part of
+   the official pipeline, doesn't touch `config.py`/`build_dataset.py`/`models.py`.**
+   Retrained a small GRU to predict the day-over-day CHANGE in volatility
+   (`delta = vol(t+1) - vol(t)`, with `vol(t)` read from the input window's own last
+   timestep and un-scaled back to raw units first - `splits.py` only standardises
+   input features, never target columns, so the raw feature had to be reconstructed
+   from `scaler_params.csv`'s mean/std before the delta was meaningful; an earlier
+   version of this script skipped that step and produced a badly misleading, much
+   worse number as a result). Absolute level reconstructed as `vol(t) +
+   predicted_delta`, same pattern as the Alpha Agent's price reconstruction in
+   `metrics.py`. **Confirmed result:**
+   | Framing | Vol RMSE | Skill vs persistence | Significant (seeds) |
+   |---|---|---|---|
+   | Option A (official, absolute level) | 0.01980 ± 0.00271 | -765.9% ± 118.6% | 5/5 |
+   | Option B (delta, reconstructed) | 0.01153 ± 0.00294 | -404.1% ± 128.6% | 5/5 |
+
+   **Verdict: option B is a real, substantial improvement (RMSE down ~42%) but still
+   loses to naive persistence on all 5 seeds.** This is expected, not just a weaker
+   version of the same failure: real volatility genuinely clusters day-to-day (a
+   well-known stylised fact in the literature, independent of this dataset's specific
+   window construction), so "yesterday's vol predicts today's reasonably well" is a
+   strong baseline on its own merits, not purely an artifact of the 13/14-day overlap.
+   Option B removes the artificial part of persistence's advantage but not the
+   genuine part.
+
+   **Diagnosing the official (absolute-level) model further**
+   (`diagnose_beta_vol.py` - throwaway): checked whether it was secretly doing a bad
+   version of persistence, or collapsing toward a bland average. Neither: predicted
+   values have essentially the same variance as the real target (`pred std / actual
+   std = 1.004`), but that variance is **uncorrelated with the true future value**
+   (`corr(pred, actual)` averaged 0.131 across seeds and flipped sign between them,
+   e.g. seed 0 = +0.38, seed 3 = -0.08). Practically: it isn't predicting nothing, and
+   it isn't copying anything - it's producing volatility-shaped **noise** with
+   realistic magnitude but no real relationship to what actually happens next. Worth
+   flagging as a real-world-deployment concern beyond the RMSE number itself: a model
+   like this could look convincing (plausible-looking variability) while adding no
+   genuine information, which is arguably worse than an obviously-flat prediction.
+
+   **GARCH as an input feature tested (2026-09-21), `experiment_garch_feature.py` -
+   THROWAWAY.** Separate idea from option B: instead of changing WHAT is predicted,
+   this changes what information the model SEES - GARCH(1,1)'s own one-step-ahead
+   forecast added as a 20th input feature, official absolute-level target otherwise
+   unchanged. Real complication handled here: `garch_baseline.py`'s GARCH fit uses
+   the ENTIRE training split, which is leakage-safe for producing val/test forecasts
+   but NOT safe to reuse as an input feature on training days themselves (an early
+   training day's "forecast" would then be informed by later training data the fit
+   saw). Fixed by fitting GARCH on only the first ~2 years of train (2018-2019) and
+   rolling those fixed parameters forward from 2020 onward - same walk-forward
+   technique `garch_baseline.py` already uses for val/test, just started earlier.
+   Cost: this experiment's usable training range shrinks to 2020-2023 (~4 years
+   instead of the official ~6), since the first 2 years have no leakage-safe GARCH
+   feature. **Confirmed result: RMSE 0.01586 ± 0.00145** - also a real, significant
+   improvement over the official 0.01980, though smaller than option B's, and more
+   stable across seeds (std dropped from 0.00271 to 0.00145).
+
+   **Do the two fixes stack? Tested and answered (2026-09-21).** A first combined run
+   (delta target + GARCH feature together) scored worse (0.01610) than delta-only
+   (0.01153) - but that comparison was confounded, since the combined run inherited
+   the GARCH feature's 2020-2023 data restriction while delta-only had used the full
+   2018-2023 range. A controlled follow-up (`experiment_delta_restricted.py`, run by
+   Claude directly at the student's explicit request) held the training range fixed
+   at 2020-2023 for both: **delta-only scored 0.01368, delta+GARCH scored 0.01610 -
+   the GARCH feature made it measurably worse, not better, even with the data-range
+   confound removed.** Likely explanation: the delta framing may already capture most
+   of what GARCH's forecast would add (redundant information), and a 20th input
+   dimension adds overfitting risk on a fairly small dataset without a matching
+   benefit. **Conclusion: the two fixes do not stack - use option B (delta target)
+   alone, not combined with the GARCH feature.**
+
+   **Complete picture, all five variants tested:**
+   | Variant | Train range | Vol RMSE | Skill vs persistence |
+   |---|---|---|---|
+   | Official (absolute level) | full 2018-2023 | 0.01980 ± 0.00271 | -765.9% ± 118.6% |
+   | Delta target only | full 2018-2023 | **0.01153 ± 0.00294** | **-404.1% ± 128.6%** |
+   | Delta target only (restricted, control) | 2020-2023 | 0.01368 ± 0.00265 | -498.5% ± 116.0% |
+   | GARCH feature only (absolute level) | 2020-2023 | 0.01586 ± 0.00145 | -593.9% ± 63.6% |
+   | Delta target + GARCH feature | 2020-2023 | 0.01610 ± 0.00272 | -604.3% ± 119.0% |
+
+   All five lose to naive persistence (0.00229), all differences significant by DM
+   test on all 5 seeds. **Best result found: delta target alone, full training range
+   (0.01153).** **Recommended framing for Van Alten: multiple framings and one
+   feature-engineering fix were tested; the delta-target reframing alone is the best
+   of them; none beat persistence; the residual gap reflects real volatility
+   clustering rather than a fixable modelling error.** This is a complete,
+   well-controlled negative result, not an unexplained one - stronger material for
+   the write-up than either a single result or no investigation at all.
+
+   **Practical implication for Phase 4 (Dynamic Risk Engine):** as things stand, if
+   Phase 4 needs a volatility number, none of the Beta Agent's volatility framings
+   should be trusted over simply using naive persistence (or GARCH) directly - this
+   is a real, current limitation to keep in mind when Phase 4 design starts, not
+   just a Phase 3 write-up footnote. The jump-risk head, by contrast, has genuine
+   demonstrated skill (beats its naive baseline on all 5 seeds, see below) and
+   remains the part of the Beta Agent with real, usable output.
 2. **Jump base rate** - measured, 2.48% (see EDA above). Used to compute
    `BCEWithLogitsLoss`'s `pos_weight` for the Beta Agent's jump head (computed exactly
    from the actual training window's rate at runtime, not hardcoded - see
@@ -306,9 +422,15 @@ MAPE automatically alongside RMSE).
   ratios above carry real sampling uncertainty and shouldn't be quoted as precise.
 
 ### What's still open in Phase 3
-1. **No statistical significance test yet for Beta Agent vs GARCH** - currently just
-   two RMSE numbers sitting next to each other, no DM-test-equivalent rigor applied
-   yet (unlike Phase 2's Alpha Agent evaluation).
+1. **Fix built: `skill_scores.py`** (compares Beta Agent against naive persistence -
+   proper DM test, same target - and against GARCH - descriptive only, different
+   targets, see finding 1 above for why no DM test is run there). Confirmed
+   2026-09-21: Beta Agent loses badly to persistence (see finding 1's update above,
+   this is the headline result to lead with when raising finding 1 with Van Alten).
+   Beta Agent vs GARCH, each against its own target: GARCH RMSE=0.02220, Beta Agent
+   RMSE=0.01980 ± 0.00271 - Beta Agent looks slightly better here, but this pairing
+   is explicitly NOT a rigorous comparison (different targets) and should not be
+   quoted as "Beta Agent beats GARCH" without that caveat attached every time.
 2. **Data-scarcity caveat, not yet written up anywhere formal:** the test
    set has only ~231 Beta windows at a ~2.7% jump base rate = a handful of
    actual jump days in the entire test set (single digits). Too few for fine-grained
@@ -319,29 +441,52 @@ MAPE automatically alongside RMSE).
    limitation in the proposal's own Chapter 7 conclusion. Do not restructure the
    splits to fix this - the tradeoffs aren't obviously better and it would ripple
    through everything already built/audited.
-3. **Van Alten conversation on finding 1** - still pending. Student's stated plan
-   (2026-09-21): raise it next time they meet in person, proceeding under option 2 in
-   the meantime, willing to change if he prefers option 3. The calibration/Platt
-   scaling finding above is arguably also worth mentioning to him, since it's a real
-   limitation of the jump-risk output that matters for how Phase 4 should use it.
-4. No Phase 3 summary PDF built yet (unlike Phase 1's README.md and Phase 2's
-   PHASE2_SUMMARY.pdf) - worth doing once the above items are closed out.
-5. Phase 3 also needs (per `PHASE1_SPEC.md`'s proposal Chapter 6.1.3, not yet started):
-   nothing else structurally - the three deliverables listed there (trained Beta
-   Agent, calibrated forecasts, GARCH verification) are the ones tracked above.
+3. **Van Alten conversation on finding 1** - still pending, but now backed by a
+   complete, well-controlled investigation (5 variants tested, see finding 1 above)
+   rather than a single negative number. Student's stated plan (2026-09-21): raise it
+   next time they meet in person, proceeding under option 2 in the meantime, willing
+   to change if he prefers option 3 (now with real evidence for what option 3 would
+   look like - the delta-target framing). The calibration/Platt scaling finding is
+   arguably also worth mentioning, since it's a real limitation of the jump-risk
+   output that matters for how Phase 4 should use it.
+4. **`PHASE3_SUMMARY.pdf` built (2026-09-21)** - mirrors `PHASE2_SUMMARY.pdf`'s
+   format. Covers architecture/training recipe, jump-risk results + calibration/Platt
+   scaling, the full finding-1 investigation (all 5 variants), the GARCH baseline,
+   and open items for Phase 4. Generator script (`build_phase3_summary.py`) was
+   thrown away after running, same pattern as Phase 2's - only the PDF is committed.
+5. Phase 3 also needs (per `PHASE1_SPEC.md`'s proposal Chapter 6.1.3): nothing else
+   structurally - the three deliverables listed there (trained Beta Agent, calibrated
+   forecasts, GARCH verification) are the ones tracked above, all done.
+
+**Phase 3 is now functionally complete** except for the Van Alten conversation on
+finding 1 (item 3 above) and the freeze protocol, which depends on that conversation's
+outcome.
 
 ## Immediate next steps, in likely order
 
-1. Build the calibration check (pooled across seeds, coarse buckets)
-2. Add statistical rigor to the Beta Agent vs GARCH comparison
-3. Gather MAPE for GRU/Bi-LSTM/Alpha Agent (Phase 2 loose end, quick - code already
-   supports it)
-4. Have the Van Alten conversation on finding 1 (and raise finding 4 - proposal text
-   contradiction - at the same time, and correct Chapter 3's start-date claim)
-5. Once findings 1 and 4 are settled: run the freeze protocol on `data/processed/`
-6. Write a Phase 3 summary (mirroring `PHASE2_SUMMARY.pdf`)
-7. Move to Phase 4 (Dynamic Risk Engine, Weeks 12-13) - not started, not discussed in
-   detail yet beyond what's in the proposal itself
+Phase 3 is functionally complete (see its status section above) - everything below is
+either the student's own task (the Van Alten conversation can't be done by an LLM) or
+genuinely blocked on that conversation's outcome.
+
+1. ~~Build the calibration check~~ DONE. ~~Add statistical rigor to the Beta Agent vs
+   GARCH comparison~~ DONE (`skill_scores.py`). ~~Investigate finding 1 further~~ DONE -
+   full 5-variant investigation (delta target, GARCH feature, combined, controlled
+   comparison), see finding 1's status above. ~~Gather MAPE for GRU/Bi-LSTM/Alpha
+   Agent~~ still open, see Phase 2's "still open" note - quick, code already supports
+   it (`python3 train.py --model gru` etc.), just needs running and isn't blocking
+   anything else. ~~Write a Phase 3 summary~~ DONE (`PHASE3_SUMMARY.pdf`).
+2. Have the Van Alten conversation on finding 1 (lead with the full investigation
+   above - multiple framings tested, the delta-target reframing is the best fix
+   found, the residual gap is explained by real volatility clustering) and raise
+   finding 4 (proposal text contradiction) at the same time, and correct Chapter 3's
+   start-date claim
+3. Once findings 1 and 4 are settled: run the freeze protocol on `data/processed/`
+   (finding 1's resolution could change `build_dataset.py`'s target definition, so
+   don't freeze before this)
+4. Move to Phase 4 (Dynamic Risk Engine, Weeks 12-13) - not started, not discussed in
+   detail yet beyond what's in the proposal itself. Keep in mind the volatility-head
+   limitation documented above when designing it: as things stand, none of the Beta
+   Agent's volatility framings should be trusted over naive persistence/GARCH.
 
 ## Working conventions worth preserving
 
