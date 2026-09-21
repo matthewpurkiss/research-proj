@@ -1,17 +1,19 @@
 """
 models.py
 
-Phase 2 model architectures. Built on PyTorch's standard nn.LSTM/nn.GRU
-layers rather than a from-scratch cell implementation - nobody hand-derives
-LSTM gate equations for a project like this, and hand-rolling one would
-just be a less-tested reimplementation of what the framework already
-provides.
+Phase 2 and Phase 3 model architectures. Built on PyTorch's standard
+nn.LSTM/nn.GRU layers rather than a from-scratch cell implementation -
+nobody hand-derives LSTM gate equations for a project like this, and
+hand-rolling one would just be a less-tested reimplementation of what
+the framework already provides.
 
-Each class here is one architecture from Section 5.6.1 of the proposal.
+Phase 2 classes are the Section 5.6.1 baselines plus the Alpha Agent
+(Section 5.2). BetaAgent (Section 5.3) is Phase 3.
 """
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class VanillaLSTM(nn.Module):
@@ -132,3 +134,42 @@ class AlphaAgent(nn.Module):
         attn_out, _ = self.attention(query, out, out)
         summary = attn_out.squeeze(1)      # (batch, hidden*2)
         return self.head(summary).squeeze(-1)
+
+
+class BetaAgent(nn.Module):
+    """Section 5.3: volatility and jump-risk forecaster. Single GRU
+    layer (32 hidden units - much lighter than the Alpha Agent's stack,
+    matching the narrower task), over a shorter 30-day window (volatility
+    regimes shift faster and more locally than directional trends).
+
+    One shared GRU representation feeds two separate output heads:
+    - Volatility: softplus-activated, always positive - a plain linear
+      output could go negative, which is nonsensical for a volatility
+      forecast.
+    - Jump risk: returned as a RAW logit, deliberately not
+      sigmoid-applied here. Train with nn.BCEWithLogitsLoss directly on
+      this logit - it combines the sigmoid and the loss into one
+      numerically stable operation. Applying sigmoid here and then
+      plain BCELoss is the classic way to lose precision on extreme
+      logit values. Apply torch.sigmoid() to this output only when an
+      actual probability is needed (reporting, inference).
+
+    forward() returns (volatility, jump_logit) as two separate tensors,
+    not one combined output - the training loop needs both separately
+    to compute the two different loss terms.
+    """
+
+    def __init__(self, input_size=19, hidden_size=32):
+        super().__init__()
+        self.gru = nn.GRU(input_size, hidden_size, num_layers=1, batch_first=True)
+        self.vol_head = nn.Linear(hidden_size, 1)
+        self.jump_head = nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        out, _ = self.gru(x)          # (batch, 30, hidden_size)
+        last_step = out[:, -1, :]     # (batch, hidden_size)
+
+        volatility = F.softplus(self.vol_head(last_step)).squeeze(-1)
+        jump_logit = self.jump_head(last_step).squeeze(-1)
+
+        return volatility, jump_logit
