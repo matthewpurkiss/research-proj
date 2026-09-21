@@ -255,28 +255,78 @@ MAPE automatically alongside RMSE).
   for a "sanity check," not a headline comparison). Converged cleanly:
   `alpha[1]+beta[1]=0.908` (healthy, stationary). **Validation RMSE=0.02752, test
   RMSE=0.02220.**
+- **Calibration check** (`calibration_check` in `train_beta.py`): pools jump-
+  probability predictions across all 5 seeds' test runs (1155 predictions - note: the
+  actual pooled count, since Beta test windows = 231/seed, not the raw 260-day split
+  count), quantile-bucketed into 4 coarse buckets rather than a fine-grained
+  reliability diagram, given the real data constraint in item 3 below.
+  **MAJOR FINDING: the model is severely overconfident.** Buckets showed mean
+  predicted probabilities of 45%-97%, but actual observed jump frequency in every
+  bucket was only 0.35%-2.08% - the highest-confidence bucket (~87% predicted) only
+  saw real jumps ~2% of the time. HOWEVER: actual frequency increased monotonically
+  with predicted probability across all 4 buckets (0.35% -> 1.04% -> 1.73% -> 2.08%),
+  meaning the model **ranks days correctly** (good discrimination) despite being
+  **badly calibrated** (wrong absolute probabilities) - these are different
+  properties, and only the second one is broken. Root cause: the `pos_weight ~ 36`
+  class-imbalance correction in the loss makes missing a jump ~36x costlier than a
+  false alarm, giving the model a strong incentive to hedge toward high probabilities
+  broadly rather than to output genuinely calibrated ones. Optimizing weighted BCE and
+  being calibrated are different objectives that pulled against each other here.
+  **This matters directly for Phase 4:** if the Dynamic Risk Engine ever uses these
+  probabilities literally (e.g. expected-loss = probability x position size), it would
+  be working with numbers ~10-40x too high. If it only uses them to rank/threshold
+  days by relative risk, the raw output is fine as-is.
+- **Fix built AND CONFIRMED: Platt scaling recalibration** (`fit_platt_scaling`,
+  `apply_platt_scaling`, `platt_recalibrate` in `train_beta.py`). Standard 2-parameter
+  logistic correction (`calibrated = sigmoid(A*logit + B)`), fit PER SEED on that
+  seed's own validation-set logits (never test, to keep test honestly held out), then
+  applied to that same seed's test-set logits. Chosen over the more flexible isotonic
+  regression alternative because validation has just as few real jump examples as
+  test does - Platt scaling's 2-parameter simplicity is more robust to that data
+  scarcity than a more flexible non-parametric fit would be.
+
+  **Confirmed results (2026-09-21):** predicted probabilities dropped from the
+  45%-97% range to a 2.5%-14% range - much closer to the actual observed frequencies
+  (0.35%-2.08% across the same 4 buckets). In ratio terms (predicted/actual, i.e. how
+  many times too high):
+  | Bucket | Before | After |
+  |---|---|---|
+  | 1 | 128x | 7.1x |
+  | 2 | 62x | 4.1x |
+  | 3 | 45x | 4.1x |
+  | 4 | 42x | 6.6x |
+
+  **Honest characterization for the writeup:** Platt scaling substantially reduced
+  overconfidence (roughly 40-130x too high down to roughly 4-7x too high), but the
+  model remains measurably miscalibrated even after correction - this is NOT "fixed,"
+  it's "meaningfully improved." Also worth stating explicitly: the "actual frequency"
+  numbers in each bucket are themselves estimated from a tiny number of real
+  events (~3 real jump-days per seed, ~6-7 unique calendar days total across the test
+  set, pooled 5x by re-evaluating with 5 different seeds) - the residual-miscalibration
+  ratios above carry real sampling uncertainty and shouldn't be quoted as precise.
 
 ### What's still open in Phase 3
-1. **Calibration check** - not yet built. Plan agreed: pool predictions across all 5
-   seeds' test runs (~1300 instances from 260 real test days) rather than one seed,
-   use coarse/few buckets given the real data constraint below, NOT a fine-grained
-   reliability diagram.
-2. **No statistical significance test yet for Beta Agent vs GARCH** - currently just
+1. **No statistical significance test yet for Beta Agent vs GARCH** - currently just
    two RMSE numbers sitting next to each other, no DM-test-equivalent rigor applied
    yet (unlike Phase 2's Alpha Agent evaluation).
-3. **Data-scarcity caveat identified, not yet written up anywhere formal:** the test
-   set has only ~260 days at a 2.7% jump base rate = **~7 actual jump days in the
-   entire test set**. Too few for fine-grained per-class metrics (precision/recall
-   curves, confusion matrices, granular calibration bins). This is NOT a bug or a
-   split-sizing mistake - it's inherent to combining a short (1-year) test period with
-   a rare target event, and the 1-year test period is already an explicitly disclosed
+2. **Data-scarcity caveat, not yet written up anywhere formal:** the test
+   set has only ~231 Beta windows at a ~2.7% jump base rate = a handful of
+   actual jump days in the entire test set (single digits). Too few for fine-grained
+   per-class metrics beyond what's already been done (precision/recall curves,
+   confusion matrices, finer calibration bins). This is NOT a bug or a split-sizing
+   mistake - it's inherent to combining a short (1-year) test period with a rare
+   target event, and the 1-year test period is already an explicitly disclosed
    limitation in the proposal's own Chapter 7 conclusion. Do not restructure the
    splits to fix this - the tradeoffs aren't obviously better and it would ripple
    through everything already built/audited.
-4. **Van Alten conversation on finding 1** - still pending (see above).
-5. No Phase 3 summary PDF built yet (unlike Phase 1's README.md and Phase 2's
+3. **Van Alten conversation on finding 1** - still pending. Student's stated plan
+   (2026-09-21): raise it next time they meet in person, proceeding under option 2 in
+   the meantime, willing to change if he prefers option 3. The calibration/Platt
+   scaling finding above is arguably also worth mentioning to him, since it's a real
+   limitation of the jump-risk output that matters for how Phase 4 should use it.
+4. No Phase 3 summary PDF built yet (unlike Phase 1's README.md and Phase 2's
    PHASE2_SUMMARY.pdf) - worth doing once the above items are closed out.
-6. Phase 3 also needs (per `PHASE1_SPEC.md`'s proposal Chapter 6.1.3, not yet started):
+5. Phase 3 also needs (per `PHASE1_SPEC.md`'s proposal Chapter 6.1.3, not yet started):
    nothing else structurally - the three deliverables listed there (trained Beta
    Agent, calibrated forecasts, GARCH verification) are the ones tracked above.
 
