@@ -38,7 +38,9 @@ Research_Proj/                          <- repo root
     train_beta.py, garch_baseline.py, skill_scores.py     <- Phase 3 (in progress)
     diagnose_beta_vol.py, experiment_delta_vol.py,
     experiment_garch_feature.py, experiment_combined.py,
-    experiment_delta_restricted.py    <- throwaway finding-1 investigation, all done
+    experiment_delta_restricted.py, experiment_single_day_vol.py
+      <- throwaway finding-1 investigation, all done - single_day_vol.py is the
+         breakthrough result (Van Alten's suggestion), see finding 1's status
     data/raw/       <- real fetched CSVs (immutable, frozen 2026-09-21 fetch)
     data/processed/ <- aligned_dataset.csv, train/val/test.csv, *_windows.npz, scaler_params.csv
 ```
@@ -237,31 +239,64 @@ values when in doubt.** The current `data/raw` is confirmed real (frozen 2026-09
    benefit. **Conclusion: the two fixes do not stack - use option B (delta target)
    alone, not combined with the GARCH feature.**
 
-   **Complete picture, all five variants tested:**
+   **Picture before raising this with Van Alten (5 variants, all still predicting
+   the 14-day rolling target in some form):**
    | Variant | Train range | Vol RMSE | Skill vs persistence |
    |---|---|---|---|
    | Official (absolute level) | full 2018-2023 | 0.01980 ± 0.00271 | -765.9% ± 118.6% |
-   | Delta target only | full 2018-2023 | **0.01153 ± 0.00294** | **-404.1% ± 128.6%** |
+   | Delta target only | full 2018-2023 | 0.01153 ± 0.00294 | -404.1% ± 128.6% |
    | Delta target only (restricted, control) | 2020-2023 | 0.01368 ± 0.00265 | -498.5% ± 116.0% |
    | GARCH feature only (absolute level) | 2020-2023 | 0.01586 ± 0.00145 | -593.9% ± 63.6% |
    | Delta target + GARCH feature | 2020-2023 | 0.01610 ± 0.00272 | -604.3% ± 119.0% |
 
    All five lose to naive persistence (0.00229), all differences significant by DM
-   test on all 5 seeds. **Best result found: delta target alone, full training range
-   (0.01153).** **Recommended framing for Van Alten: multiple framings and one
-   feature-engineering fix were tested; the delta-target reframing alone is the best
-   of them; none beat persistence; the residual gap reflects real volatility
-   clustering rather than a fixable modelling error.** This is a complete,
-   well-controlled negative result, not an unexplained one - stronger material for
-   the write-up than either a single result or no investigation at all.
+   test on all 5 seeds.
 
-   **Practical implication for Phase 4 (Dynamic Risk Engine):** as things stand, if
-   Phase 4 needs a volatility number, none of the Beta Agent's volatility framings
-   should be trusted over simply using naive persistence (or GARCH) directly - this
-   is a real, current limitation to keep in mind when Phase 4 design starts, not
-   just a Phase 3 write-up footnote. The jump-risk head, by contrast, has genuine
-   demonstrated skill (beats its naive baseline on all 5 seeds, see below) and
-   remains the part of the Beta Agent with real, usable output.
+   **BREAKTHROUGH (2026-09-22) - Van Alten's suggestion, confirmed.** Emailed him the
+   investigation above; he asked the right clarifying question: "are you predicting
+   the 14-day average, or just the next day's own volatility?" Confirmed it's the
+   14-day average (`beta_target_vol` = `btc_realised_vol_14d.shift(-1)`, i.e. a
+   rolling statistic, not a single day's value) - exactly the root cause already
+   diagnosed. His suggestion: predict just that day's own volatility instead. Tested
+   as `experiment_single_day_vol.py` (throwaway): retarget to next-day `|btc_log_return|`
+   (that day's own absolute move - the standard single-day volatility proxy, and
+   exactly what `garch_baseline.py` already predicts, which also finally makes a fair,
+   same-target Beta-Agent-vs-GARCH comparison possible for the first time). Same
+   official 19 features, 30-day lookback, full 2018-2023 train range - no leakage
+   complication this time, since the new target is just a different column already in
+   `aligned_dataset.csv`, not something that needed fitting.
+
+   **Confirmed result (2026-09-22):**
+   | Comparison | Result |
+   |---|---|
+   | Test RMSE | 0.01973 ± 0.00092 |
+   | vs naive persistence (0.02083) | skill +5.3% ± 4.4% (4/5 seeds beat it, 0/5 individually significant) |
+   | vs GARCH(1,1), same target (0.02247) | **Beta Agent wins on 5/5 seeds, DM-significant on all 5 (p<0.05, most p<0.0001)** |
+
+   **This is the first genuinely positive result in the whole investigation.** The
+   14-day-average framing was the actual root cause, not just a contributing factor -
+   removing it (predict a single day's own volatility instead of a smoothed multi-day
+   statistic) doesn't just shrink the gap to persistence, it roughly closes it, and
+   produces a clean, significant win over GARCH. Note: GARCH's RMSE here (0.02247)
+   differs slightly from the descriptive comparison earlier (0.02220) because this
+   evaluates only the ~230 test days that have a full 30-day Beta Agent window behind
+   them, a handful fewer than GARCH's full test range - not an inconsistency, just a
+   different (smaller, matched) evaluation set for a fair comparison.
+
+   **Recommended framing going forward: adopt the single-day volatility target
+   (Van Alten's suggestion) as the official Beta Agent target**, pending his
+   confirmation - this supersedes the delta-target framing as the best result found,
+   and is the one with a genuine positive claim behind it (beats GARCH significantly,
+   roughly matches persistence) rather than "less bad than before."
+
+   **Practical implication for Phase 4 (Dynamic Risk Engine):** this changes the
+   earlier conclusion - if the official target is switched to single-day volatility,
+   the Beta Agent's volatility output DOES have genuine, demonstrated value (beats
+   GARCH significantly) and can reasonably be used in Phase 4, unlike every 14-day-
+   average framing tested before it. Still needs Van Alten's formal sign-off before
+   treating this as official, since it changes `build_dataset.py`'s target definition
+   (same reason the delta-target/GARCH-feature results were held as "recommended,
+   not adopted" - this one is stronger evidence, but the process is the same).
 2. **Jump base rate** - measured, 2.48% (see EDA above). Used to compute
    `BCEWithLogitsLoss`'s `pos_weight` for the Beta Agent's jump head (computed exactly
    from the actual training window's rate at runtime, not hardcoded - see
