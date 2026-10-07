@@ -756,6 +756,22 @@ Started early, 2026-10-07. Plan agreed with the student, in order:
    Alpha Agent has no directional edge (49.3% hit rate), so real gains would need
    a better signal, not more leverage - good future-work material, as is a
    long-only "volatility dial" using only the Beta Agent's forecast.
+7. **Direction-predictability check** (`direction_baselines.py`, added after the
+   student asked whether the Alpha Agent could beat a coin flip): next-day
+   direction hit rate on the backtest days of 2024 / 2025 / 2026, 95% Wilson
+   intervals, no rule trained or tuned. Pooled over all three (~600 days): Alpha
+   Agent 50.2% [46, 54], always-up 49.0%, momentum 1d 47.8%, 5d 47.3%, 20d 52.8%
+   [49, 57], mean reversion 52.2% [48, 56]. **Every pooled interval includes 50%.**
+   Patterns that looked real in one period reversed in another (mean reversion
+   56.7% in 2024 and 2025, 42.8% in 2026). Conclusion for the write-up: BTC's
+   next-day direction is not predictable from this kind of data by the Alpha Agent
+   or any simple rule - a property of the problem, not a flaw specific to the
+   model. Future-work ideas discussed with the student (NOT to be done before
+   submission - 2025 and 2026 have both been looked at, so no clean test set is
+   left): train the Alpha Agent as an up/down classifier instead of MSE (MSE on
+   near-noise targets pushes predictions to ~0, explaining the constant-sign
+   seeds), predict a longer horizon (weekly momentum - Liu & Tsyvinski 2021),
+   add derivatives / order-book / intraday data, ensemble the seeds.
    Implementation notes: `forward_test.py`
    (`fetch` / `check` / `run`) fetches 2018-01-01..2026-09-30 into
    `Code/data/forward_2026/` (frozen data never written), checks the new fetch's

@@ -92,3 +92,14 @@ Regenerate a figure by re-running its script from `Code/`; don't edit images by 
   cap (as in the leverage stress test), then run once on 2026 - all four caps are
   shown, none picked after the fact. More leverage widens the spread of outcomes
   without raising return per unit of risk; at 20x it turns to an average loss.
+
+### `phase5_direction_baselines.png`
+- **Shows:** how often each method called BTC's next-day direction correctly, in
+  2024 (validation), 2025 (test), 2026 (forward) and all three pooled, with 95%
+  confidence intervals. Methods: the Alpha Agent (5-seed average) and untrained
+  rules - always up, momentum over 1/5/20 days, mean reversion. Dashed line = 50%.
+- **Made by:** `Code/direction_baselines.py` (table in `Code/results/direction_baselines.md`).
+- **Notes for the caption:** no rule is trained or tuned. Every pooled interval
+  includes 50%, so nothing - the Alpha Agent or any simple rule - can be told apart
+  from a coin flip. Rules that looked good in one period reversed in another (mean
+  reversion: ~57% in 2024 and 2025, 43% in 2026), the signature of noise.
