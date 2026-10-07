@@ -71,3 +71,35 @@ a85a97cd9d78f7883b9d3a0bb1113391517aac22e0f29e7afd3a7bc7b81c2eac  raw/yahoo_GOLD
 69d2ddecb33e4af662d63c31d933f168bf23c2a87ebbcb593cbd15046bfbb118  raw/yahoo_SP500.csv
 30168be5c3f3d35a5411836f80fa2c383efa5d36ec9b669b05715b983a9c8445  raw/yahoo_VIX.csv
 ```
+
+---
+
+# Addendum: 2026 forward-test dataset
+
+Fetched **2026-10-07** by `Code/forward_test.py fetch` into `Code/data/forward_2026/`
+(series 2018-01-01 to 2026-09-30). Used only for the Phase 5 forward test on
+2026-01-01 to 2026-09-30. A separate dataset: the frozen dataset above was not
+modified, and every model, scaler and Risk Engine setting used on it comes from
+the frozen dataset and 2024 validation.
+
+Agreement with the frozen raw data over 2018-2025 (`forward_test.py check`): 11 of 12
+series identical; gold (GC=F futures) differs by 0.10% on a typical day (max 1.96%),
+from Yahoo's contract-roll adjustments. 2026 BTC landmarks (close): 2026-01-01 $88,732,
+high $96,929 on 2026-01-14, low $58,559 on 2026-06-30, 2026-09-30 $83,554.
+Same package versions as above.
+
+```
+512891a19aebb023498ac343f8d5c9d507046a560d90c7d728abf68f25de3308  processed/aligned_dataset.csv
+cc590d8acb7469de7a5cccad8f2c478aaf4599d9c8572f922cbd169f3d1d6bec  raw/chain_active_addresses.csv
+3f75698232c5228e74f1de0a5e278bc9eed27739be7a0e7700de0fde02775877  raw/chain_difficulty.csv
+12861e7dbb6fbb172439b20cb391f8093878f4bb4f12ec53c38c73edb1237596  raw/chain_hash_rate.csv
+60b793ef347d8c30f5713e9fd87d0f2f58b23fdbe6ac47a08acb870686fac2d5  raw/chain_mempool_size.csv
+0a28ea9f44df79d98ef4cea5eb888467f94120c1b681f0909f400251e30d9a17  raw/chain_miner_revenue.csv
+11b0c14aea61d77bd91ad60135231de0f85a92aef4208fbb39c80e06d4fe0800  raw/chain_transaction_count.csv
+1eaa58b36c012cb8c374752cf230adb991a2eeaa8ee8a69ef54f9a1ffa16e055  raw/yahoo_BTC.csv
+6741f1ffcdbe3eea4964d562da995738835e652f439e1d0b7c9bedcab29265f8  raw/yahoo_DXY.csv
+e2d10c0bb9f09e3f755d8b496eb9dbfa1a22d6bcfb029394b8de2443c3220d1c  raw/yahoo_ETH.csv
+a364b58fcbf8e37ca97c956ac43d7d7b2efa8c06bfb6899c39aa907aef31c9bc  raw/yahoo_GOLD.csv
+81fa8d702dba55ea48710d13a06fb038ccd578595334bd7d99f05a967cab3300  raw/yahoo_SP500.csv
+1fecee4851a5e62ec474e417a35e812b0aae0bb1579a675b492df900cf6b6aaf  raw/yahoo_VIX.csv
+```

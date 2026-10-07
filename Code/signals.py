@@ -57,37 +57,52 @@ def prediction_strength(pred_return, window=STRENGTH_WINDOW):
     return pd.Series(strength, index=pred_return.index)
 
 
-@torch.no_grad()
-def build(seed, split):
-    alpha = models.AlphaAgent(input_size=19, hidden_size=64)
-    alpha.load_state_dict(torch.load(train.checkpoint_path("alpha", seed), map_location="cpu"))
+def load_models(seed, direction_model="alpha"):
+    """Seed's saved direction forecaster (direction_model: "alpha" or any key of
+    train.BASELINES) and Beta Agent with its Platt (A, B)."""
+    _, model_fn, feature_indices = train.BASELINES[direction_model]
+    alpha = model_fn()
+    alpha.load_state_dict(torch.load(train.checkpoint_path(direction_model, seed), map_location="cpu"))
     alpha.eval()
-
-    all_preds = []
-    for s in SPLITS:
-        X, dates = _load_windows("alpha", s)
-        all_preds.append(pd.Series(alpha(X).numpy(), index=dates))
-    all_preds = pd.concat(all_preds).sort_index()
-    strength = prediction_strength(all_preds)
 
     beta_ckpt = torch.load(train_beta.checkpoint_path(seed), map_location="cpu")
     beta = models.BetaAgent(input_size=19, hidden_size=32)
     beta.load_state_dict(beta_ckpt["state_dict"])
     beta.eval()
+    return alpha, feature_indices, beta, (beta_ckpt["platt_A"], beta_ckpt["platt_B"])
 
-    _, alpha_dates = _load_windows("alpha", split)
-    beta_X, beta_dates = _load_windows("beta", split)
+
+@torch.no_grad()
+def from_windows(loaded, alpha_X, alpha_dates, beta_X, beta_dates, keep_dates):
+    """Signals for keep_dates. alpha_X/alpha_dates should cover enough earlier
+    windows for pred_strength's look-back (STRENGTH_WINDOW predictions)."""
+    alpha, feature_indices, beta, (platt_A, platt_B) = loaded
+    if feature_indices is not None:
+        alpha_X = alpha_X[:, :, feature_indices]
+    all_preds = pd.Series(alpha(alpha_X).numpy(), index=alpha_dates).sort_index()
+    strength = prediction_strength(all_preds)
 
     alpha_df = pd.DataFrame({
-        "pred_return": all_preds.reindex(alpha_dates),
-        "pred_strength": strength.reindex(alpha_dates),
+        "pred_return": all_preds.reindex(keep_dates),
+        "pred_strength": strength.reindex(keep_dates),
     })
     pred_vol, jump_logit = beta(beta_X)
-    jump_prob = train_beta.apply_platt_scaling(
-        jump_logit.numpy(), beta_ckpt["platt_A"], beta_ckpt["platt_B"]
-    )
-
+    jump_prob = train_beta.apply_platt_scaling(jump_logit.numpy(), platt_A, platt_B)
     beta_df = pd.DataFrame({"pred_vol": pred_vol.numpy(), "jump_prob": jump_prob}, index=beta_dates)
-    out = alpha_df.join(beta_df, how="inner")[["pred_return", "pred_strength", "pred_vol", "jump_prob"]]
+    return alpha_df.join(beta_df, how="inner")[["pred_return", "pred_strength", "pred_vol", "jump_prob"]]
+
+
+def build(seed, split, direction_model="alpha"):
+    """Signals for one split of the frozen dataset. direction_model: which
+    forecaster supplies pred_return - "alpha" (the Alpha Agent, default) or any
+    other key of train.BASELINES ("bilstm", "lstm", "gru"), for Phase 5's model
+    ablations. Needs that model's checkpoints from train.py --model <name>."""
+    windows = [_load_windows("alpha", s) for s in SPLITS]
+    alpha_X = torch.cat([X for X, _ in windows])
+    alpha_dates = pd.DatetimeIndex(np.concatenate([d for _, d in windows]))
+    _, keep_dates = _load_windows("alpha", split)
+    beta_X, beta_dates = _load_windows("beta", split)
+
+    out = from_windows(load_models(seed, direction_model), alpha_X, alpha_dates, beta_X, beta_dates, keep_dates)
     assert out.notna().all().all(), f"missing signal values for seed {seed}, {split}"
     return out

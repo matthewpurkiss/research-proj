@@ -650,7 +650,7 @@ ablation on every seed for drawdown, Sharpe and total return.
 - BTC ended the test window almost exactly where it started (87,472 -> 87,509),
   after a large rise and a November fall.
 
-## Phase 5 status: IN PROGRESS (Evaluation and ablations, Weeks 14-16)
+## Phase 5 status: COMPLETE (Evaluation and ablations, Weeks 14-16)
 
 Started early, 2026-10-07. Plan agreed with the student, in order:
 1. ~~Rand reporting~~ DONE - `run_backtest.py` reports balances from
@@ -661,14 +661,102 @@ Started early, 2026-10-07. Plan agreed with the student, in order:
    below some brokers' 0.01 BTC minimum at these settings).
 2. ~~H3 significance test~~ DONE - `h3_tests.py`, results in
    `Code/results/h3_tests.md`, figure `figures/phase5_h3_bootstrap.png`.
-3. Rule-by-rule ablation (veto / sizing / stops / jump-based leverage, each
-   switched off and retuned) - next.
-4. 10x leverage stress test for both engines (makes liquidation rate meaningful).
-5. Model ablations inside the framework: Alpha Agent swapped for StandardBiLSTM
-   and VanillaLSTM (needs `train.py --model bilstm` / `--model lstm` checkpoints).
-6. Optional: 2026 forward test on data never used anywhere (needs a fresh fetch,
-   student's hotspot for Blockchain.com, kept as a separate dataset so the frozen
-   one is untouched). Student said yes to including it in the plan.
+3. ~~Rule-by-rule ablation~~ DONE - `ablate_rules.py`, results in
+   `Code/results/rule_ablation.md`, figure `figures/phase5_rule_ablation.png`.
+   `risk_engine.DynamicRiskParams` gained rule switches (defaults = full engine,
+   verified to reproduce the official backtest exactly). Each version retuned on
+   2024. Drawdown cost of removing each rule (paired bootstrap vs full engine,
+   5-seed average): vol-based stop +3.6 pp (p=0.0008; the only one that also hurts
+   Sharpe, +0.87, p=0.044), weak-prediction filter +3.3 pp (p=0.0002), vol-based
+   sizing +2.2 pp (p<0.0002), jump veto +1.0 pp (p=0.03, interval touches 0),
+   jump-scaled leverage +0.3 pp (p=0.002, tiny). All rules off: +12.6 pp.
+   **Reading:** no single rule carries the result; removing any one costs <= 3.6 pp
+   but all together 12.6 pp, more than the sum (~10.4), so the rules partly back
+   each other up - robustness, a finding in itself. Vol-based stops are the
+   single most valuable rule (direct credit to the Beta Agent's vol forecast).
+   "Sitting out" isn't the whole story: dropping the weak-prediction filter
+   doubles trades (63 -> 121) but only adds 3.3 pp. Caveat: retuning shifts other
+   settings too (fixed-stop version also loosened the veto and dropped the
+   filter, trading 177 days), so each bar is that version at its best, not a pure
+   one-switch change.
+4. ~~Leverage stress test~~ DONE - `stress_test.py`, results in
+   `Code/results/leverage_stress.md`, figure `figures/phase5_leverage_stress.png`.
+   Both engines retuned on 2024 at caps 2x/5x/10x/20x, run on 2025:
+   | Cap | Risk Engine MDD | Fixed MDD | Risk Engine balance | Fixed balance | Liquidations (RE / fixed) |
+   |---|---|---|---|---|---|
+   | 2x | 4.6% | 17.2% | R1,045 | R931 | 0 / 0 |
+   | 5x | 12.6% | 38.3% | R1,106 | R810 | 0 / 0 |
+   | 10x | 24.2% | 42.2% | R1,214 | R920 | 0 / 0 |
+   | 20x | 38.2% | 68.8% | R1,500 | R691 | **2 / 0** |
+   Drawdown reduction significant at every cap (p < 0.0002; +12.6 / +25.6 / +18.0 /
+   +30.6 pp). Sharpe gain significant at 2x and 5x, borderline at 10x and 20x
+   (p ~0.04 one-sided, 95% interval just includes 0).
+   **Liquidation finding:** zero for both below 20x, because a stop tighter than
+   1/leverage always fires first, BTC (24/7) opened >2% from the previous close on
+   only 3 of 2,922 days, and the simulator fills stops without slippage (understates
+   live risk). At 20x (liquidation distance 5%) the RISK ENGINE liquidated twice:
+   its vol-widened stops (rule 4) sat beyond the liquidation level. **So H3's
+   liquidation claim is not supported** - untestable below 20x, and reversed at
+   20x. Design lesson for the discussion chapter / future work: cap the stop
+   distance below 1/leverage (e.g. 80% of it). Deliberately NOT changed now - the
+   engine was designed and tuned before seeing these results.
+   **Overall H3 reading:** drawdown - strongly supported at every leverage;
+   Sharpe - not worse, better on average; liquidation - not supported.
+5. ~~Model ablations inside the framework~~ DONE - `model_ablation.py`, results in
+   `Code/results/model_ablation.md`, figure `figures/phase5_model_ablation.png`.
+   `signals.build(..., direction_model=)` now accepts any `train.BASELINES` key
+   (default "alpha", verified unchanged). Bi-LSTM and LSTM checkpoints trained by
+   the student; both reproduced Phase 2 exactly (0.02689, 0.02337).
+   | Forecaster | MDD | Sharpe | Balance from R1,000 | Trades | Hit rate |
+   |---|---|---|---|---|---|
+   | Alpha Agent | 4.6% | 0.74 | R1,045 | 63 | 51.4% ± 1.3% |
+   | Bi-LSTM, no attention | 3.4% | 0.36 | R1,010 | 25 | 50.7% ± 0.8% |
+   | Univariate LSTM | 9.2% | -0.44 | R973 | 79 | 53.6% ± 1.3% |
+   Bootstrap, is the Alpha version better? vs Bi-LSTM: no (drawdown -1.2 pp,
+   p=0.87; Sharpe +0.38, p=0.35). vs univariate LSTM: better on both but not
+   significant (+4.7 pp, p=0.098; Sharpe +1.17, p=0.097).
+   **Reading:** attention adds nothing measurable once forecasts go through the
+   framework (consistent with Phase 2's H2: only helped on unstable seeds); the
+   multivariate model does better than the univariate one but not significantly.
+   **Key finding for the write-up:** directional skill is near zero. 2025 test was
+   50.2% up days. Several models predict ONE direction nearly every day: Alpha seed
+   1 predicts down on 100% of test days, seed 4 up on 100%; Bi-LSTM seeds 1 and 0
+   likewise (0% / 98% up); the univariate LSTM leans up 71-96% of days. So the
+   framework's results come from the Risk Engine deciding WHEN and HOW MUCH to be
+   exposed (veto, strength filter, vol sizing and stops), not from forecasting
+   direction. Say this plainly rather than crediting the Alpha Agent's signal.
+6. ~~2026 forward test~~ DONE (2026-10-07) - results `Code/results/forward_2026.md`,
+   figure `figures/phase5_forward_2026.png`, dataset recorded in `DATA_FREEZE.md`
+   (addendum). Fetch: 12/12 series; 11/12 identical to the frozen data over
+   2018-2025, gold 0.10% typical difference (futures roll adjustments).
+   **Result on 194 unseen trading days (2026-01-01..2026-09-30), nothing retuned:**
+   | | Risk Engine | Fixed rules | Buy & hold |
+   |---|---|---|---|
+   | Balance from R1,000 | R1,024 ± R86 | R986 ± R196 | R942 |
+   | Lowest balance | R943 | R835 | R660 |
+   | Max drawdown | 8.7% ± 3.8% | 22.8% ± 6.4% | 39.6% |
+   | Sharpe | 0.35 | -0.18 | 0.04 |
+   Drawdown reduction +14.1 pp [+4.5, +19.2], p < 0.0002, lower on all 5 seeds -
+   **the drawdown claim replicates on fully clean data.** Sharpe gain +0.53, not
+   significant (p = 0.14) - "comparable", as H3 states. Seed 1: fixed rules made
+   more (R1,260 vs R1,049) - lower risk can cost upside. Beta Agent vol RMSE
+   0.0204 vs persistence 0.0250 (~18% better, stronger than 2025's ~5%). Alpha
+   Agent hit rate 49.3% (47.4% up days) - no directional skill out of sample.
+   Zero liquidations (2x). This is the cleanest result in the project: 2025
+   influenced design choices, 2026 influenced nothing.
+   Implementation notes: `forward_test.py`
+   (`fetch` / `check` / `run`) fetches 2018-01-01..2026-09-30 into
+   `Code/data/forward_2026/` (frozen data never written), checks the new fetch's
+   2018-2025 values against the frozen raw data and prints BTC 2026 landmarks for
+   an eyeball check (Phase 1 fake-data lesson), then runs both engines on
+   2026-01-01..2026-09-30 with NOTHING retrained/refitted/retuned (checkpoints,
+   frozen train-only scaler, 2024-tuned settings from results/chosen_params.json).
+   Verified offline by pointing it at the frozen data with a Jul-Dec 2025 stand-in
+   period: rebuilt features identical to the frozen aligned dataset, and all four
+   signals identical to signals.build on all 131 shared days. `signals.py` was
+   split into load_models / from_windows / build for this (build output verified
+   identical before and after). Why it matters: several design choices were made
+   after seeing 2025 test results, so 2026 is the only fully clean test.
 
 **H3 result (2026-10-07):**
 - Daily-return test per seed (proposal's DM test adapted: loss = negative daily
@@ -699,8 +787,9 @@ Findings 2-4 need no further supervisor input: Van Alten has said proposal-vs-fi
 differences are fine, so finding 3 (start date 2018-02-12) and finding 4 ("closing
 price" wording) are just corrections to make in the final report's text.
 
-1. **Continue Phase 5** - steps 3-6 in its status section above (rule-by-rule
-   ablation next).
+1. **Phase 5's planned steps are all done** (see its status section). Remaining before
+   Phase 6 (writing, from ~2026-11-08): the four write-up figures (framework diagram,
+   volatility-target investigation, jump calibration, Phase 2 model comparison).
 2. Optional follow-up: regularise the Beta Agent's jump branch on its own (e.g.
    weight decay) to see if it gets back to beating the base rate on all seeds.
 3. Optional: regenerate `Code/PHASE2_SUMMARY.pdf` with the full MAPE table.

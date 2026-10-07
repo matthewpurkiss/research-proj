@@ -33,6 +33,7 @@ use of the Beta Agent at all.
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,13 @@ class DynamicRiskParams:
     c: float       # stop-loss multiplier on pred_vol
     l_max: float   # leverage cap
     f_max: float = 1.0  # hard cap on fraction of equity per position
+    # Rule switches for the Phase 5 rule-by-rule ablation (ablate_rules.py).
+    # Defaults = the full engine; each one swaps a single Beta-driven rule for
+    # its plain fixed version.
+    use_jump_veto: bool = True             # rule 1 off -> never veto
+    fixed_fraction: Optional[float] = None  # rule 3 off -> this fraction every trade
+    fixed_stop: Optional[float] = None      # rule 4 off -> this stop distance every trade
+    jump_scaled_leverage: bool = True       # rule 5 off -> leverage = l_max always
 
 
 @dataclass(frozen=True)
@@ -71,7 +79,7 @@ def _direction(pred_return, pred_strength, tau_y):
 
 
 def dynamic_action(pred_return, pred_strength, pred_vol, jump_prob, p):
-    if jump_prob > p.tau_j:
+    if p.use_jump_veto and jump_prob > p.tau_j:
         return FLAT
 
     direction = _direction(pred_return, pred_strength, p.tau_y)
@@ -80,9 +88,9 @@ def dynamic_action(pred_return, pred_strength, pred_vol, jump_prob, p):
 
     return Action(
         direction=direction,
-        fraction=min(p.f_max, p.k / pred_vol),
-        stop_distance=p.c * pred_vol,
-        leverage=p.l_max * (1 - jump_prob),
+        fraction=p.fixed_fraction if p.fixed_fraction is not None else min(p.f_max, p.k / pred_vol),
+        stop_distance=p.fixed_stop if p.fixed_stop is not None else p.c * pred_vol,
+        leverage=p.l_max * (1 - jump_prob) if p.jump_scaled_leverage else p.l_max,
     )
 
 
