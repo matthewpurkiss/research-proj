@@ -172,6 +172,11 @@ Three options, in ascending order of cost and cleanliness:
 **This is a supervisor conversation, not a coding decision.** Do not pick one
 unilaterally.
 
+**Resolved (2026-10-07):** none of the three as written. After a Phase 3
+investigation showed every 14-day-window variant losing to persistence, Van
+Alten suggested predicting the next day's own volatility instead of a rolling
+window. The target is now `|log-return(t+1)|`; see `../HANDOFF.md`.
+
 ### 2. Jump base rate
 
 Must be measured in Week 3. It sets the BCE loss weighting for the Beta Agent's

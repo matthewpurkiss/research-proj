@@ -136,40 +136,55 @@ class AlphaAgent(nn.Module):
         return self.head(summary).squeeze(-1)
 
 
-class BetaAgent(nn.Module):
-    """Section 5.3: volatility and jump-risk forecaster. Single GRU
-    layer (32 hidden units - much lighter than the Alpha Agent's stack,
-    matching the narrower task), over a shorter 30-day window (volatility
-    regimes shift faster and more locally than directional trends).
+class GRURegressor(nn.Module):
+    """One GRU layer, last time step, linear head to a single raw value."""
 
-    One shared GRU representation feeds two separate output heads:
+    def __init__(self, input_size, hidden_size):
+        super().__init__()
+        self.gru = nn.GRU(input_size, hidden_size, num_layers=1, batch_first=True)
+        self.head = nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        out, _ = self.gru(x)
+        return self.head(out[:, -1, :]).squeeze(-1)
+
+
+class BetaAgent(nn.Module):
+    """Section 5.3: volatility and jump-risk forecaster, over a 30-day
+    window (volatility regimes shift faster and more locally than
+    directional trends). Light by design - 32 hidden units per branch,
+    against the Alpha Agent's 64-per-direction two-layer stack.
+
+    Two independent branches, each its own single GRU layer, rather than
+    the proposal's one GRU shared by both heads. Deviation found
+    necessary in Phase 3: with a shared GRU, training the jump head
+    pulled the shared representation away from what volatility needed
+    (validation vol RMSE rose as jump BCE fell), and no single
+    checkpoint was good for both - test vol RMSE 0.023-0.479 across
+    seeds, losing to persistence. The same code with the jump term
+    switched off reached 0.018, beating both persistence and GARCH.
+    Separate branches let each be trained and checkpointed on its own
+    objective (train_beta.py).
+
     - Volatility: softplus-activated, always positive - a plain linear
       output could go negative, which is nonsensical for a volatility
       forecast.
     - Jump risk: returned as a RAW logit, deliberately not
       sigmoid-applied here. Train with nn.BCEWithLogitsLoss directly on
       this logit - it combines the sigmoid and the loss into one
-      numerically stable operation. Applying sigmoid here and then
-      plain BCELoss is the classic way to lose precision on extreme
-      logit values. Apply torch.sigmoid() to this output only when an
+      numerically stable operation. Apply torch.sigmoid() only when an
       actual probability is needed (reporting, inference).
 
-    forward() returns (volatility, jump_logit) as two separate tensors,
-    not one combined output - the training loop needs both separately
-    to compute the two different loss terms.
+    forward() still returns (volatility, jump_logit), so callers see the
+    same interface as a dual-head model.
     """
 
     def __init__(self, input_size=19, hidden_size=32):
         super().__init__()
-        self.gru = nn.GRU(input_size, hidden_size, num_layers=1, batch_first=True)
-        self.vol_head = nn.Linear(hidden_size, 1)
-        self.jump_head = nn.Linear(hidden_size, 1)
+        self.vol_net = GRURegressor(input_size, hidden_size)
+        self.jump_net = GRURegressor(input_size, hidden_size)
 
     def forward(self, x):
-        out, _ = self.gru(x)          # (batch, 30, hidden_size)
-        last_step = out[:, -1, :]     # (batch, hidden_size)
-
-        volatility = F.softplus(self.vol_head(last_step)).squeeze(-1)
-        jump_logit = self.jump_head(last_step).squeeze(-1)
-
+        volatility = F.softplus(self.vol_net(x))
+        jump_logit = self.jump_net(x)
         return volatility, jump_logit

@@ -126,10 +126,12 @@ For anything that lands in the report, the proposal, or documentation:
 These four are unresolved and must not be forgotten. Full detail in
 `PHASE1_SPEC.md`.
 
-1. **Volatility target overlap.** The Beta Agent's volatility target
-   structurally overlaps its own input feature, so naive persistence scores a
-   high R-squared by construction rather than by learning. Beta Agent results are
-   meaningless unless reported against that persistence baseline.
+1. **Volatility target overlap. RESOLVED 2026-10-07.** The original target
+   (tomorrow's 14-day rolling std) overlapped its own input feature 13/14 days,
+   so naive persistence won by construction. On Van Alten's suggestion the
+   target is now tomorrow's single-day realised volatility, `|log-return(t+1)|`
+   (`build_dataset.py`). Beta Agent results are still always reported against
+   persistence and GARCH (`skill_scores.py`). Full history in `../HANDOFF.md`.
 2. **Jump base rate unmeasured.** Needed to set BCE class weighting before any
    Phase 3 training run.
 3. **Effective start date.** Rolling-window warm-up consumes early rows, so the

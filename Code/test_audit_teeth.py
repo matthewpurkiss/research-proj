@@ -1,7 +1,7 @@
 """
 test_audit_teeth.py
 
-Injects five known faults into a scratch copy of the pipeline's output,
+Injects six known faults into a scratch copy of the pipeline's output,
 one at a time, and asserts leakage_audit.py's corresponding check fails
 on each. PHASE1_SPEC.md's rule: don't trust leakage_audit.py until this
 passes - an audit that passes everything is indistinguishable from one
@@ -108,6 +108,14 @@ def mutation_target_contemporaneous(tmp_dir):
     aligned.to_csv(os.path.join(tmp_dir, "aligned_dataset.csv"))
 
 
+def mutation_vol_target_contemporaneous(tmp_dir):
+    """Fault 6: sets beta_target_vol to TODAY's |log-return| instead of
+    tomorrow's - the volatility-target version of fault 4."""
+    aligned = _load_real_aligned()
+    aligned["beta_target_vol"] = aligned["btc_log_return"].abs()
+    aligned.to_csv(os.path.join(tmp_dir, "aligned_dataset.csv"))
+
+
 def mutation_rows_shuffled(tmp_dir):
     """Fault 5: shuffles the training split's row order before saving.
     aligned_dataset.csv, val.csv, and test.csv are copied through
@@ -150,6 +158,11 @@ MUTATIONS = [
         "5. rows shuffled before splitting",
         mutation_rows_shuffled,
         lambda: leakage_audit.check_no_shuffling_and_boundaries(),
+    ),
+    (
+        "6. volatility target made contemporaneous",
+        mutation_vol_target_contemporaneous,
+        lambda: leakage_audit.check_targets_not_contemporaneous(),
     ),
 ]
 

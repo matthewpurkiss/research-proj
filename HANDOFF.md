@@ -36,12 +36,12 @@ Research_Proj/                          <- repo root
     run_pipeline.py, check_connectivity.py, eda.ipynb   <- Phase 1 pipeline (all done)
     models.py, train.py, evaluate.py, metrics.py         <- Phase 2 (all done)
     train_beta.py, garch_baseline.py, skill_scores.py     <- Phase 3 (in progress)
-    diagnose_beta_vol.py, experiment_delta_vol.py,
-    experiment_garch_feature.py, experiment_combined.py,
-    experiment_delta_restricted.py, experiment_single_day_vol.py
-      <- throwaway finding-1 investigation, all done - single_day_vol.py is the
-         breakthrough result (Van Alten's suggestion), see finding 1's status
-    data/raw/       <- real fetched CSVs (immutable, frozen 2026-09-21 fetch)
+    (finding-1 investigation scripts - diagnose_beta_vol.py and the five
+     experiment_*.py files - were removed on 2026-10-07 when the single-day
+     target became official, since they assume the old 14-day target and would
+     print wrong numbers against the rebuilt data. Code is in git history at
+     commit 3eb8226; results are recorded under finding 1 below.)
+    data/raw/       <- real fetched CSVs (fetched 2026-08-12, frozen 2026-10-07 - see DATA_FREEZE.md)
     data/processed/ <- aligned_dataset.csv, train/val/test.csv, *_windows.npz, scaler_params.csv
 ```
 
@@ -123,7 +123,8 @@ all-time-high date off by 5x). Caught by cross-referencing known historical pric
 landmarks, not by any automated check. A second fetch returned genuine data,
 cross-verified against Statmuse. **Lesson for whoever continues this: fetch success
 (HTTP 200, no exceptions) does not guarantee real data - sanity-check against known
-values when in doubt.** The current `data/raw` is confirmed real (frozen 2026-09-21).
+values when in doubt.** The current `data/raw` is confirmed real (fetched 2026-08-12,
+frozen 2026-10-07 - see `DATA_FREEZE.md`).
 
 ### The synthetic-data guard (3 layers, all required together)
 1. `run_pipeline.py --synthetic` writes `data/raw/SYNTHETIC_DATA_DO_NOT_TRUST.txt`
@@ -283,8 +284,51 @@ values when in doubt.** The current `data/raw` is confirmed real (frozen 2026-09
    them, a handful fewer than GARCH's full test range - not an inconsistency, just a
    different (smaller, matched) evaluation set for a fair comparison.
 
-   **Recommended framing going forward: adopt the single-day volatility target
-   (Van Alten's suggestion) as the official Beta Agent target**, pending his
+   **ADOPTED AS OFFICIAL, 2026-10-07.** `build_dataset.py` now defines
+   `beta_target_vol = |btc_log_return|.shift(-1)` (the column name is unchanged).
+   Leakage check 4 independently verifies it, and a sixth mutation in
+   `test_audit_teeth.py` proves the check catches a same-day version of it.
+   `skill_scores.py` now runs a real DM test against GARCH, since both predict the
+   same target. `CLAUDE.md`, `README.md` and `PHASE1_SPEC.md` mark finding 1
+   resolved. Rebuilt pipeline: leakage audit 9/9, mutation test 6/6.
+
+   **Second change needed, same day: the BetaAgent's heads no longer share a GRU.**
+   The first official run on the new target used the original shared-GRU model and
+   failed badly: test vol RMSE 0.023-0.479 (mean 0.121), losing to persistence and
+   GARCH on every seed. Two causes, both confirmed by direct test:
+   - Checkpoint selection on validation jump BCE alone kept epoch-0 weights on seed
+     0 (vol RMSE 0.479) - the same failure min_epochs was meant to prevent, which it
+     can't, since it only delays early stopping, not best-epoch selection.
+   - More fundamentally, the heads interfered: as the jump head trained, validation
+     vol RMSE got worse (0.0234 -> 0.0264 on seed 0). The same harness with the jump
+     term switched off reached 0.0182 on three seeds. A baseline-normalised combined
+     loss was tried first; it fixed the epoch-0 case (seed 0: 0.479 -> 0.030) but not
+     the interference.
+   Fix: `models.BetaAgent` now holds two independent single-layer 32-unit GRUs
+   (`vol_net`, `jump_net`), still returning `(volatility, jump_logit)`, and
+   `train_beta.py` trains and checkpoints each branch on its own validation loss.
+   `jump_loss_weight` is gone. **This deviates from the proposal's "single GRU layer
+   with a dual-head output"** - needs one line of justification in the methodology
+   chapter (the interference evidence above); Van Alten has said proposal deviations
+   are acceptable.
+
+   **Official results (2026-10-07, student's own run):**
+   | | Result |
+   |---|---|
+   | Test vol RMSE | 0.01974 ± 0.00128 (seeds 0-3 ≈ 0.019, seed 4 = 0.0223) |
+   | vs persistence (0.02079) | skill +5.0% ± 6.2%; better on 4/5 seeds, none individually significant |
+   | vs GARCH(1,1) (0.02246) | skill +12.1% ± 5.7%; **significantly better on 4/5 seeds** (p<0.0001), seed 4 tied |
+   | Test jump BCE | 1.5953 ± 0.2635 vs naive 1.6995 - **better on average but only 3/5 seeds** (seeds 2 and 4 worse) |
+
+   Jump head got weaker than under the old shared setup (5/5 seeds, mean 1.3953):
+   sharing with the volatility head seems to have been regularising it. Its
+   checkpoint is chosen from validation's ~7 jump days, and the test year has fewer
+   jumps (1.15% vs 2.67% in val), so it's noisy across seeds. Possible follow-up:
+   regularise the jump branch alone (e.g. weight decay). Calibration also got worse
+   - see Phase 3's calibration notes below.
+
+   Original recommendation, kept for history: adopt the single-day volatility
+   target (Van Alten's suggestion) as the official Beta Agent target, pending his
    confirmation - this supersedes the delta-target framing as the best result found,
    and is the one with a genuine positive claim behind it (beats GARCH significantly,
    roughly matches persistence) rather than "less bad than before."
@@ -309,12 +353,12 @@ values when in doubt.** The current `data/raw` is confirmed real (frozen 2026-09
    needs correcting.** Not yet raised with Van Alten as far as this conversation
    shows.
 
-### Freeze protocol: NOT YET DONE
-Per `PHASE1_SPEC.md`, once satisfied, `data/processed/` should be copied to a
-read-only location and the fetch date + package versions recorded. **This has not
-happened yet** - still pending until findings 1 and 4 are resolved with Van Alten,
-since finding 1's resolution could still change `build_dataset.py`'s output.
-Fetch date so far: 2026-09-21 (most recent corrected fetch).
+### Freeze protocol: DONE (2026-10-07)
+See `DATA_FREEZE.md` at the repo root: fetch date (2026-08-12), package versions,
+and SHA-256 checksums of all 23 raw/processed files. Read-only local copy at
+`frozen/data_2026-10-07/` (gitignored - same bytes are in git at tag
+`data-freeze-2026-10-07`). Every reported number must come from this dataset; a
+re-fetch would need a re-freeze and a full re-run of every result.
 
 ## Phase 2 status: COMPLETE (see `Code/PHASE2_SUMMARY.pdf` for the full formal writeup)
 
@@ -388,9 +432,30 @@ the LSTM row and would need regenerating to include the full table above if that
 matters for the final write-up (its generator script was discarded, same convention
 as Phase 3's; a new one would need writing if this is wanted).
 
-## Phase 3 status: IN PROGRESS (Beta Agent, Weeks 9-11)
+## Phase 3 status: COMPLETE (Beta Agent, Weeks 9-11)
 
-### What's built and verified
+**Current state as of 2026-10-07 - read this first; the bullets below are the
+history of how it got here and some numbers in them are superseded.**
+- Volatility target: tomorrow's single-day |log-return| (finding 1, resolved).
+- Model: two independent 32-unit GRU branches, each trained/checkpointed on its own
+  objective (see finding 1's "second change" note for why).
+- Official numbers: finding 1's "Official results (2026-10-07)" table.
+- Calibration on the current model (pooled test predictions, 4 buckets): raw
+  predicted probabilities 21%-94% against actual jump frequencies 0%-3.1%. After
+  per-seed Platt scaling: 1.3%-56% predicted against 0%-3.1% actual - roughly
+  18-33x too high in the upper three buckets (bottom bucket had no jumps at all),
+  WORSE than the old model's 4-7x. Likely cause: each jump branch's checkpoint is
+  chosen where it fits validation best, so its validation logits look more
+  informative than they turn out to be on test, and Platt scaling (fit on
+  validation) over-trusts them (A > 1 on every seed). Ranking is still correct and
+  cleaner than before - actual frequency rises 0% -> 0.35% -> 1.73% -> 3.11% across
+  the buckets. Same Phase 4 implication as before: use jump outputs to rank days by
+  risk, not as literal probabilities.
+- The scripts in the bullets below (train_beta.py, skill_scores.py,
+  garch_baseline.py) are all current; descriptions of the single shared GRU,
+  `jump_loss_weight`, and checkpoint selection on jump BCE alone are history.
+
+### What's built and verified (history)
 - **`BetaAgent` class** in `models.py`: single GRU (32 units), 30-day lookback
   (`BETA_LOOKBACK`), dual output head - volatility via softplus (always positive),
   jump-risk via a RAW logit (deliberately not sigmoid-applied in `forward()` - train
@@ -514,29 +579,24 @@ outcome.
 
 ## Immediate next steps, in likely order
 
-Phase 3 is functionally complete (see its status section above) - everything below is
-either the student's own task (the Van Alten conversation can't be done by an LLM) or
-genuinely blocked on that conversation's outcome.
+As of 2026-10-07, Phases 1-3 are complete and the data is frozen (`DATA_FREEZE.md`).
+Findings 2-4 need no further supervisor input: Van Alten has said proposal-vs-final
+differences are fine, so finding 3 (start date 2018-02-12) and finding 4 ("closing
+price" wording) are just corrections to make in the final report's text.
 
-1. ~~Build the calibration check~~ DONE. ~~Add statistical rigor to the Beta Agent vs
-   GARCH comparison~~ DONE (`skill_scores.py`). ~~Investigate finding 1 further~~ DONE -
-   full 5-variant investigation (delta target, GARCH feature, combined, controlled
-   comparison), see finding 1's status above. ~~Gather MAPE for GRU/Bi-LSTM/Alpha
-   Agent~~ DONE (2026-09-21) - full table now in Phase 2's MAPE section above;
-   confirms the near-random-walk finding holds across all four models, doesn't
-   change any H1/H2 conclusion. ~~Write a Phase 3 summary~~ DONE (`PHASE3_SUMMARY.pdf`).
-2. Have the Van Alten conversation on finding 1 (lead with the full investigation
-   above - multiple framings tested, the delta-target reframing is the best fix
-   found, the residual gap is explained by real volatility clustering) and raise
-   finding 4 (proposal text contradiction) at the same time, and correct Chapter 3's
-   start-date claim
-3. Once findings 1 and 4 are settled: run the freeze protocol on `data/processed/`
-   (finding 1's resolution could change `build_dataset.py`'s target definition, so
-   don't freeze before this)
-4. Move to Phase 4 (Dynamic Risk Engine, Weeks 12-13) - not started, not discussed in
-   detail yet beyond what's in the proposal itself. Keep in mind the volatility-head
-   limitation documented above when designing it: as things stand, none of the Beta
-   Agent's volatility framings should be trusted over naive persistence/GARCH.
+1. **Phase 4 (Dynamic Risk Engine + framework integration, Weeks 12-13) - next, not
+   started.** Per the proposal it's deterministic rules, not a learned model: combine
+   the Alpha Agent's return forecast with the Beta Agent's volatility and jump-risk
+   outputs into position sizing / stops, wired end to end to emit a backtest report.
+   The Beta Agent's volatility output is now usable (beats GARCH significantly on
+   4/5 seeds); its jump output should be used to rank days by risk, not as a
+   literal probability (calibration notes in Phase 3).
+2. Phase 5 (Evaluation and ablations, Weeks 14-16) - H3: full framework vs an
+   ablated version.
+3. Optional follow-up: regularise the Beta Agent's jump branch on its own (e.g.
+   weight decay) to see if it gets back to beating the base rate on all seeds.
+4. Optional: regenerate `Code/PHASE2_SUMMARY.pdf` with the full MAPE table.
+5. Student's own task: tick boxes 3 and 6 on the final thesis's AI Declaration.
 
 ## Working conventions worth preserving
 

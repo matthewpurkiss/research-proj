@@ -11,7 +11,7 @@ functions called directly) rather than re-checking the pipeline's output
 against itself. A check that just repeats the pipeline's own logic would
 agree with a bug in that logic instead of catching it. test_audit_teeth.py
 is what proves this independence actually works, by deliberately breaking
-build_dataset.py five ways and confirming these checks scream.
+build_dataset.py six ways and confirming these checks scream.
 
 Exit code 0 means every check passed. Non-zero means at least one failed,
 and the report says which and why.
@@ -111,14 +111,25 @@ def check_jump_threshold_shifted():
 
 def check_targets_not_contemporaneous():
     """Leakage check 4: alpha_target at row t must equal btc_log_return
-    at row t+1, not row t. Confirms the off-by-one is genuinely there."""
+    at row t+1, and beta_target_vol at row t must equal |btc_log_return|
+    at row t+1 - not row t. Confirms the off-by-one is genuinely there for
+    both regression targets."""
     aligned = _read(ALIGNED_PATH)
-    target_t = aligned["alpha_target"].iloc[:-1].to_numpy()
     return_t_plus_1 = aligned["btc_log_return"].iloc[1:].to_numpy()
 
-    passed = np.allclose(target_t, return_t_plus_1)
-    detail = "alpha_target(t) == btc_log_return(t+1) confirmed" if passed else (
-        "MISMATCH - alpha_target may be contemporaneous with its own row"
+    alpha_ok = np.allclose(aligned["alpha_target"].iloc[:-1].to_numpy(), return_t_plus_1)
+    vol_ok = np.allclose(aligned["beta_target_vol"].iloc[:-1].to_numpy(), np.abs(return_t_plus_1))
+
+    problems = []
+    if not alpha_ok:
+        problems.append("alpha_target may be contemporaneous with its own row")
+    if not vol_ok:
+        problems.append("beta_target_vol does not equal tomorrow's |btc_log_return|")
+
+    passed = not problems
+    detail = (
+        "alpha_target(t) == btc_log_return(t+1) and beta_target_vol(t) == |btc_log_return(t+1)| confirmed"
+        if passed else "MISMATCH - " + "; ".join(problems)
     )
     return passed, detail
 

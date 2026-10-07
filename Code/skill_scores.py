@@ -1,116 +1,102 @@
 """
 skill_scores.py
 
-Resolves Phase 3's "what next" item after Platt scaling: putting a number
-on how much better the Beta Agent's volatility forecast is than (a) a
-naive persistence baseline on the SAME target, and (b) the GARCH(1,1)
-sanity-check baseline.
+How much better is the Beta Agent's volatility forecast than (a) naive
+persistence and (b) the GARCH(1,1) baseline? Both comparisons are on the
+SAME target - tomorrow's single-day realised volatility, |log-return(t+1)|
+(build_dataset.py's beta_target_vol) - on the same test days, so both get
+a proper Diebold-Mariano test per seed.
 
-This is NOT a Diebold-Mariano test against GARCH. DM requires both
-models' errors to be computed against the same target series on the
-same days (see evaluate.py's diebold_mariano). The Beta Agent predicts
-14-day trailing realised volatility (config.REALISED_VOL_WINDOW); GARCH
-predicts next-day |return| - open finding 1, still unresolved with Van
-Alten. Forcing a DM test between them would silently paper over that
-mismatch by pretending it's a fair paired comparison when it isn't.
-
-What this script does instead - the "option 2" resolution the user
-already decided on for finding 1: report each model's own skill score
-(1 - RMSE / baseline_RMSE) against a baseline that shares ITS target,
-and place them side by side. The persistence-vs-Beta-Agent comparison
-below is a real, valid same-target comparison and gets a proper DM
-test. The GARCH row is descriptive only, clearly labelled as such.
+Before the target switch (open finding 1, resolved 2026-09-22) the Beta
+Agent predicted a 14-day rolling std while GARCH predicted next-day
+|return|, so the GARCH comparison here could only be descriptive. Now that
+both forecast the same quantity, it's a real paired test.
 """
 
+import os
+
 import numpy as np
+import pandas as pd
 
 import garch_baseline
 import train_beta
 from evaluate import diebold_mariano
 
+DATA_DIR = os.path.join("data", "processed")
 
-def naive_persistence_vol(vol_y, prev_last_value):
-    """Predicts today's 14-day trailing realised vol as simply
-    yesterday's value of the same series - the standard "nothing
-    changed" naive baseline used throughout this project (metrics.py's
-    MAPE baseline, train_beta.py's naive_jump_bce). prev_last_value
-    carries the last value from the split immediately before this one,
-    so the very first test-day prediction isn't left undefined."""
-    shifted = np.concatenate([[prev_last_value], vol_y[:-1]])
-    return shifted
+
+def load_test_context():
+    """Each test window's end date, and that day's own |log-return| - the
+    naive persistence forecast for tomorrow's single-day volatility.
+    Read straight from aligned_dataset.csv by date rather than by shifting
+    the target array, because the first test window sits BETA_LOOKBACK-1
+    days into the test split: shifting would borrow a value from ~29 days
+    earlier for that first day instead of the actual previous day."""
+    aligned = pd.read_csv(
+        os.path.join(DATA_DIR, "aligned_dataset.csv"), index_col="Date", parse_dates=True
+    )
+    data = np.load(os.path.join(DATA_DIR, "beta_test_windows.npz"), allow_pickle=True)
+    end_dates = pd.to_datetime(data["end_dates"])
+    persistence_pred = aligned["btc_log_return"].abs().reindex(end_dates).to_numpy()
+    return end_dates, persistence_pred
 
 
 def skill_score(model_rmse, baseline_rmse):
     return 1 - (model_rmse / baseline_rmse)
 
 
-def beta_vs_persistence(all_results):
-    """Same-target comparison: Beta Agent vs lag-1 persistence, on each
-    seed's own test predictions. Valid DM test, since both series here
-    are forecasts of the identical target on the identical days."""
-    _, val_vol, _ = train_beta.load_beta_split("val")
-    val_vol = val_vol.numpy()
+def compare_to_baseline(all_results, baseline_name, baseline_pred):
+    """Per-seed RMSE, skill score and DM test of the Beta Agent against
+    one baseline's per-day forecasts on the identical test days."""
+    actual = all_results[0]["test_vol_y"]
+    baseline_errors = actual - baseline_pred
+    baseline_rmse = float(np.sqrt(np.mean(baseline_errors ** 2)))
 
-    print("Beta Agent vs naive persistence (same target: 14-day trailing realised vol)")
+    print(f"\nBeta Agent vs {baseline_name} (baseline RMSE={baseline_rmse:.5f})")
     print("-" * 72)
 
-    skills, n_significant = [], 0
+    skills, n_significant_better, n_significant_worse = [], 0, 0
     for i, result in enumerate(all_results):
-        test_vol_y = result["test_vol_y"]
-        test_pred_vol = result["test_pred_vol"]
-        persistence_pred = naive_persistence_vol(test_vol_y, val_vol[-1])
-
-        model_errors = test_vol_y - test_pred_vol
-        persistence_errors = test_vol_y - persistence_pred
-        persistence_rmse = float(np.sqrt(np.mean(persistence_errors ** 2)))
-
-        skill = skill_score(result["test_vol_rmse"], persistence_rmse)
+        assert np.allclose(result["test_vol_y"], actual), "test targets differ between seeds"
+        model_errors = actual - result["test_pred_vol"]
+        skill = skill_score(result["test_vol_rmse"], baseline_rmse)
         skills.append(skill)
 
-        dm_stat, p_value = diebold_mariano(model_errors, persistence_errors, h=1)
-        significant = p_value < 0.05
-        n_significant += significant
+        dm_stat, p_value = diebold_mariano(model_errors, baseline_errors, h=1)
+        if p_value < 0.05:
+            if result["test_vol_rmse"] < baseline_rmse:
+                n_significant_better += 1
+                verdict = "significant, Beta Agent better"
+            else:
+                n_significant_worse += 1
+                verdict = f"significant, {baseline_name} better"
+        else:
+            verdict = "not significant"
 
         print(
-            f"  seed {i}: Beta RMSE={result['test_vol_rmse']:.5f}  "
-            f"persistence RMSE={persistence_rmse:.5f}  skill={skill:+.1%}  "
-            f"DM={dm_stat:+.3f}  p={p_value:.4f}  "
-            f"({'significant' if significant else 'not significant'})"
+            f"  seed {i}: Beta RMSE={result['test_vol_rmse']:.5f}  skill={skill:+.1%}  "
+            f"DM={dm_stat:+.3f}  p={p_value:.4f}  ({verdict})"
         )
 
     skills = np.array(skills)
     print(f"\nskill score mean +/- std: {skills.mean():+.1%} +/- {skills.std():.1%}")
-    print(f"{n_significant} of {len(all_results)} seeds significant at alpha=0.05")
-
-
-def beta_vs_garch(all_results):
-    """Descriptive only - different targets (see module docstring), so
-    no DM test here, just each model's RMSE against its own target and
-    the resulting skill scores placed side by side."""
-    _, _, test_forecast = garch_baseline.fit_and_forecast()
-    _, _, test_returns = garch_baseline.load_raw_returns()
-    garch_rmse, _ = garch_baseline.evaluate(test_forecast, test_returns)
-
-    beta_rmses = np.array([r["test_vol_rmse"] for r in all_results])
-
-    print("\nBeta Agent vs GARCH(1,1) - DIFFERENT TARGETS, descriptive comparison only")
-    print("-" * 72)
-    print("  Beta Agent target: 14-day trailing realised volatility")
-    print("  GARCH target:      next-day |return|")
-    print(f"  GARCH(1,1) test RMSE (vs its own target):        {garch_rmse:.5f}")
     print(
-        f"  Beta Agent test RMSE mean +/- std (vs its own target): "
-        f"{beta_rmses.mean():.5f} +/- {beta_rmses.std():.5f}"
-    )
-    print(
-        "  No single skill score is reported here - the two RMSEs aren't on the "
-        "same target, so dividing one by the other would imply a rigor this "
-        "comparison doesn't have. Kept here as a sanity-check reference point only."
+        f"significant at alpha=0.05: Beta Agent better on {n_significant_better}, "
+        f"{baseline_name} better on {n_significant_worse}, of {len(all_results)} seeds"
     )
 
 
 if __name__ == "__main__":
     print(f"device: {train_beta.DEVICE}")
     _, _, _, _, all_results = train_beta.run_multi_seed(verbose=False)
-    beta_vs_persistence(all_results)
-    beta_vs_garch(all_results)
+
+    end_dates, persistence_pred = load_test_context()
+    assert len(persistence_pred) == len(all_results[0]["test_vol_y"]), (
+        "persistence baseline and Beta Agent test windows don't line up"
+    )
+    compare_to_baseline(all_results, "naive persistence", persistence_pred)
+
+    _, _, garch_test_forecast = garch_baseline.fit_and_forecast()
+    garch_pred = garch_test_forecast.reindex(end_dates)
+    assert garch_pred.notna().all(), "some test windows have no aligned GARCH forecast"
+    compare_to_baseline(all_results, "GARCH(1,1)", garch_pred.to_numpy())

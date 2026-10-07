@@ -191,6 +191,14 @@ def _compute_targets(features):
     built from today's value would just be handing the model its own
     input back as the answer.
 
+    The volatility target is tomorrow's single-day realised volatility,
+    |log-return(t+1)|, not tomorrow's 14-day rolling std. The rolling
+    version shared 13 of its 14 days with the btc_realised_vol_14d input
+    feature, so naive persistence beat every model trained on it by
+    construction (open finding 1). Switched on Van Alten's suggestion,
+    2026-09-22; the 14-day feature stays as an input, only the target
+    changed.
+
     The jump label compares today's move against a threshold computed
     only from the 30 days strictly BEFORE today (leakage check 3):
     shift(1) on the rolling std is what excludes today's own return from
@@ -200,7 +208,7 @@ def _compute_targets(features):
     targets = pd.DataFrame(index=features.index)
 
     targets["alpha_target"] = features["btc_log_return"].shift(-1)
-    targets["beta_target_vol"] = features["btc_realised_vol_14d"].shift(-1)
+    targets["beta_target_vol"] = features["btc_log_return"].abs().shift(-1)
 
     trailing_std = (
         features["btc_log_return"]

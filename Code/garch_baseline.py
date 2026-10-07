@@ -8,12 +8,10 @@ those FIXED (never refit) parameters against the actual, expanding
 return history - standard walk-forward, fixed-parameter evaluation, not
 a full periodic refit.
 
-Deliberately compares GARCH's forecast against next-day's ABSOLUTE
-RETURN (the standard realised-volatility proxy in the literature), not
-the Beta Agent's own 14-day trailing target - GARCH's native output is
-a single-day-ahead forecast, and forcing an exact match to our 14-day
-window is unnecessary complexity for what the proposal frames as a
-sanity check, not a headline comparison.
+Compares GARCH's forecast against next-day's ABSOLUTE RETURN (the
+standard single-day realised-volatility proxy) - which is also the Beta
+Agent's own target since the 2026-09-22 switch away from the 14-day
+rolling std, so skill_scores.py can DM-test the two head to head.
 """
 
 import os

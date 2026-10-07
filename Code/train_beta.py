@@ -10,14 +10,18 @@ Phase 2: Adam (lr=1e-3, betas=(0.9, 0.999)), batch size 64, early
 stopping after 10 stagnant validation epochs, LR halved after 5
 stagnant epochs, gradient clipping at max norm 1.0, 5 fixed seeds.
 
-The volatility loss (MSE) and jump loss (BCE, with a class-imbalance
-pos_weight) sit on very different numeric scales - BCE with a ~36x
-pos_weight correction is typically much larger than MSE on a target
-that's usually under 0.1. jump_loss_weight below is a rough starting
-point, not a carefully derived value - both loss components print
-separately every epoch specifically so the real relative scale is
-visible and this can be calibrated against actual numbers rather than
-guessed blindly.
+The volatility and jump branches share no parameters (see BetaAgent in
+models.py for why), so each is trained separately with its own
+optimizer, LR schedule, early stopping and best-checkpoint selection:
+volatility on validation MSE, jump on validation BCE (with a class-
+imbalance pos_weight). This replaced a combined loss with a hand-picked
+jump_loss_weight=0.01 and checkpoint selection on validation jump BCE
+alone, which on the single-day volatility target kept epoch-0 weights on
+one seed (test vol RMSE 0.479) and traded volatility accuracy for jump
+accuracy on the rest.
+
+The jump branch's checkpoint is still chosen from validation's ~7 real
+jump days, so its test BCE is inherently noisy across seeds.
 """
 
 import os
@@ -87,43 +91,21 @@ def _eval(model, X, vol_y, jump_y, jump_loss_fn):
     return vol_mse, jump_bce, pred_vol.cpu(), pred_jump_prob, pred_jump_logit.cpu()
 
 
-def train_one_seed(seed, hidden_size=32, jump_loss_weight=0.01, max_epochs=100,
-                    patience=10, lr_patience=5, min_epochs=20, batch_size=64, verbose=False):
-    """Trains one BetaAgent instance for one seed. Returns a dict - see
-    the return statement at the end of this function for the keys.
+def _train_branch(model, branch, output_idx, loss_fn, train_X, train_y, val_X, val_y,
+                   label, max_epochs, patience, lr_patience, min_epochs, batch_size, verbose):
+    """Trains one branch of the BetaAgent (model.vol_net or model.jump_net)
+    on its own output - output_idx picks it from model's (volatility,
+    jump_logit) - with its own optimizer, LR schedule, early stopping and
+    best-checkpoint selection on its own validation loss. Only that
+    branch's parameters are optimised; the other branch is untouched.
 
-    min_epochs guards against a real failure mode found while testing:
-    val_jump_bce is genuinely noisy in the first several epochs, before
-    the model has learned much of anything, and volatility MSE takes
-    ~10-20 epochs to collapse to its converged value (see BetaAgent's
-    docstring, and open finding 1 - this collapse is the model
-    exploiting the target's overlap with its own input). Without a
-    warm-up floor, a lucky noisy dip in jump_bce at epoch 0 can get
-    selected as "best" before volatility has converged at all, which is
-    exactly what happened on seed 0 during testing: it stopped after 11
-    epochs having kept epoch 0's weights, with test vol RMSE of 0.47
-    instead of the ~0.02 every other seed reached.
-    """
-    set_seed(seed)
-
-    train_X, train_vol, train_jump = load_beta_split("train")
-    val_X, val_vol, val_jump = load_beta_split("val")
-    test_X, test_vol, test_jump = load_beta_split("test")
-
-    pos_weight = torch.tensor(compute_pos_weight(train_jump), device=DEVICE)
-
-    train_loader = DataLoader(
-        TensorDataset(train_X, train_vol, train_jump), batch_size=batch_size, shuffle=True
-    )
-
-    model = models.BetaAgent(input_size=train_X.shape[-1], hidden_size=hidden_size).to(DEVICE)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999))
+    min_epochs stops early stopping from firing during the first, noisy
+    epochs, before the branch has learned much of anything."""
+    loader = DataLoader(TensorDataset(train_X, train_y), batch_size=batch_size, shuffle=True)
+    optimizer = torch.optim.Adam(branch.parameters(), lr=1e-3, betas=(0.9, 0.999))
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=lr_patience
     )
-
-    vol_loss_fn = nn.MSELoss()
-    jump_loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     best_val_loss = float("inf")
     best_state = None
@@ -131,47 +113,57 @@ def train_one_seed(seed, hidden_size=32, jump_loss_weight=0.01, max_epochs=100,
 
     for epoch in range(max_epochs):
         model.train()
-        for xb, vol_b, jump_b in train_loader:
-            xb, vol_b, jump_b = xb.to(DEVICE), vol_b.to(DEVICE), jump_b.to(DEVICE)
+        for xb, yb in loader:
+            xb, yb = xb.to(DEVICE), yb.to(DEVICE)
             optimizer.zero_grad()
-            pred_vol, pred_jump_logit = model(xb)
-            vol_loss = vol_loss_fn(pred_vol, vol_b)
-            jump_loss = jump_loss_fn(pred_jump_logit, jump_b)
-            loss = vol_loss + jump_loss_weight * jump_loss
+            loss = loss_fn(model(xb)[output_idx], yb)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(branch.parameters(), max_norm=1.0)
             optimizer.step()
 
-        val_vol_mse, val_jump_bce, _, _, _ = _eval(model, val_X, val_vol, val_jump, jump_loss_fn)
-        # Checkpoint selection tracks val_jump_bce alone, not the combined
-        # weighted loss. Volatility MSE converges to a good value almost
-        # immediately (within ~10-20 epochs) regardless of which epoch
-        # gets picked - a symptom of open finding 1's structural target
-        # overlap, not genuine learning - while jump risk is the genuinely
-        # hard, still-improving objective where checkpoint choice matters.
-        # The combined metric used previously was already >99% driven by
-        # the jump term in practice (the scale mismatch this file's
-        # docstring flags), so this makes explicit what was already
-        # happening rather than changing the actual selection behaviour.
-        scheduler.step(val_jump_bce)
+        model.eval()
+        with torch.no_grad():
+            val_loss = loss_fn(model(val_X.to(DEVICE))[output_idx], val_y.to(DEVICE)).item()
+        scheduler.step(val_loss)
 
-        if val_jump_bce < best_val_loss:
-            best_val_loss = val_jump_bce
-            best_state = {k: v.clone() for k, v in model.state_dict().items()}
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_state = {k: v.clone() for k, v in branch.state_dict().items()}
             epochs_without_improvement = 0
         else:
             epochs_without_improvement += 1
 
         if verbose:
-            print(
-                f"  seed {seed} epoch {epoch:>3}: val_vol_mse={val_vol_mse:.6f} "
-                f"(rmse={val_vol_mse ** 0.5:.5f})  val_jump_bce={val_jump_bce:.4f}"
-            )
+            print(f"  {label} epoch {epoch:>3}: val_loss={val_loss:.6f}")
 
         if epoch >= min_epochs and epochs_without_improvement >= patience:
             break
 
-    model.load_state_dict(best_state)
+    branch.load_state_dict(best_state)
+
+
+def train_one_seed(seed, hidden_size=32, max_epochs=100, patience=10, lr_patience=5,
+                    min_epochs=20, batch_size=64, verbose=False):
+    """Trains one BetaAgent instance for one seed - volatility branch
+    first, then jump branch, each on its own objective. Returns a dict -
+    see the return statement at the end of this function for the keys."""
+    set_seed(seed)
+
+    train_X, train_vol, train_jump = load_beta_split("train")
+    val_X, val_vol, val_jump = load_beta_split("val")
+    test_X, test_vol, test_jump = load_beta_split("test")
+
+    pos_weight = torch.tensor(compute_pos_weight(train_jump), device=DEVICE)
+    vol_loss_fn = nn.MSELoss()
+    jump_loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+
+    model = models.BetaAgent(input_size=train_X.shape[-1], hidden_size=hidden_size).to(DEVICE)
+    common = dict(max_epochs=max_epochs, patience=patience, lr_patience=lr_patience,
+                  min_epochs=min_epochs, batch_size=batch_size, verbose=verbose)
+    _train_branch(model, model.vol_net, 0, vol_loss_fn, train_X, train_vol, val_X, val_vol,
+                  label=f"seed {seed} vol ", **common)
+    _train_branch(model, model.jump_net, 1, jump_loss_fn, train_X, train_jump, val_X, val_jump,
+                  label=f"seed {seed} jump", **common)
     val_vol_mse, val_jump_bce, val_pred_vol, val_pred_jump_prob, val_pred_jump_logit = _eval(
         model, val_X, val_vol, val_jump, jump_loss_fn
     )

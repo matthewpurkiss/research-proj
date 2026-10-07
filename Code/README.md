@@ -60,12 +60,13 @@ notebook environment, or ask for it to be rebuilt the same way.
 
 ### Open findings carried from `PHASE1_SPEC.md`
 
-1. **Volatility target overlap.** Confirmed with real numbers in `eda.ipynb`: the
-   Beta Agent's naive-persistence R² is **0.917**. Any Beta Agent result in Phase 3
-   must be reported against this baseline, not as a raw R². Which of the three fixes
-   in `PHASE1_SPEC.md` to use (report against baseline / report skill score vs
-   GARCH / change the target window) is **still an open supervisor conversation**,
-   not resolved here.
+1. **Volatility target overlap. Resolved.** Confirmed with real numbers in
+   `eda.ipynb`: on the original target (tomorrow's 14-day rolling std), naive
+   persistence scored an R² of **0.917** by construction. On Van Alten's suggestion
+   the target was changed to tomorrow's single-day realised volatility,
+   `|log-return(t+1)|`, which shares no days with the input window. `eda.ipynb`'s
+   stored outputs predate this change; re-run it to see the new target's
+   persistence R². Full investigation in `../HANDOFF.md` and `../PHASE3_SUMMARY.pdf`.
 2. **Jump base rate.** Measured: **2.48% overall** (train 2.67%, val 2.67%, test
    1.15%). Suggested BCE `pos_weight` for the Phase 3 jump head, from the training
    split: **~36.4**.

@@ -5,3 +5,6 @@
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Local read-only data freeze copy (same bytes are in git at tag data-freeze-2026-10-07)
+frozen/
