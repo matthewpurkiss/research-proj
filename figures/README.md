@@ -80,3 +80,15 @@ Regenerate a figure by re-running its script from `Code/`; don't edit images by 
   checkpoints, the frozen train-only feature scaler, and Risk Engine settings
   chosen on 2024. The 2025 test year influenced some design choices; 2026 did not,
   so this is the cleanest out-of-sample result in the project.
+
+### `phase5_forward_2026_leverage.png`
+- **Shows:** a "choose your risk level" menu on the unseen 2026 data. Left: return
+  over Jan-Sep 2026 for each run (dots) and the average (black bar) at leverage
+  caps 2x/5x/10x/20x, with buy-and-hold BTC dashed. Right: average worst drawdown
+  at each cap, with buy-and-hold dashed.
+- **Made by:** `Code/forward_test.py run` (table in `Code/results/forward_2026.md`,
+  "Choosing a risk level" section).
+- **Notes for the caption:** every other Risk Engine setting tuned on 2024 at each
+  cap (as in the leverage stress test), then run once on 2026 - all four caps are
+  shown, none picked after the fact. More leverage widens the spread of outcomes
+  without raising return per unit of risk; at 20x it turns to an average loss.

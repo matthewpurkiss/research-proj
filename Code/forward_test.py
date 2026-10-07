@@ -58,6 +58,7 @@ import risk_engine
 import run_backtest as rb
 import signals
 import splits
+import stress_test
 
 FORWARD_START = "2026-01-01"
 FORWARD_END = "2026-09-30"
@@ -160,6 +161,57 @@ def plot(dyn_runs, fix_runs, bh_equity):
     fig.savefig(os.path.join(rb.FIGURES_DIR, f"phase5_{REPORT_NAME}.png"), dpi=200)
 
 
+def leverage_menu(sigs, market):
+    """The same Risk Engine at each stress-test leverage cap, with every other
+    setting tuned on 2024 validation AT THAT CAP (stress_test.tune_at_leverage),
+    then run once on the forward period. Presented as a menu of risk levels -
+    every cap is reported, not just the best, so nothing is cherry-picked."""
+    val_sigs = {s: signals.build(s, "val") for s in rb.SEEDS}
+    val_market = backtest.prepare_market(val_sigs[0].index)
+    rows = {}
+    for L in stress_test.LEVERAGE_LEVELS:
+        dyn_params, _ = stress_test.tune_at_leverage(L, val_sigs, val_market)
+        runs = rb.run_all_seeds(dyn_params, rb.dynamic_decider, sigs, market)
+        finals = np.array([runs[s]["equity"].iloc[-1] for s in rb.SEEDS])
+        rows[L] = {
+            "returns": finals - 1,
+            "lowest": min(runs[s]["equity"].min() for s in rb.SEEDS),
+            "mdd": np.mean([runs[s]["metrics"]["max_drawdown"] for s in rb.SEEDS]),
+            "sharpe": np.mean([runs[s]["metrics"]["sharpe"] for s in rb.SEEDS]),
+            "liquidations": sum(runs[s]["metrics"]["n_liquidations"] for s in rb.SEEDS),
+        }
+    return rows
+
+
+def plot_menu(menu, bh_return, bh_mdd):
+    caps = list(menu)
+    x = np.arange(len(caps))
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
+
+    for i, L in enumerate(caps):
+        r = menu[L]["returns"] * 100
+        axes[0].scatter(np.full(len(r), i), r, color="tab:blue", alpha=0.6, s=25,
+                        label="one run (seed)" if i == 0 else None)
+        axes[0].scatter(i, r.mean(), color="black", marker="_", s=600, linewidths=2,
+                        label="average" if i == 0 else None)
+    axes[0].axhline(0, color="grey", linewidth=0.8)
+    axes[0].axhline(bh_return * 100, color="black", linestyle="--", linewidth=0.8, label="buy & hold BTC")
+    axes[0].set_title("Return over the forward period (%)", fontsize=10)
+
+    axes[1].bar(x, [menu[L]["mdd"] * 100 for L in caps], color="tab:blue")
+    axes[1].axhline(bh_mdd * 100, color="black", linestyle="--", linewidth=0.8, label="buy & hold BTC")
+    axes[1].set_title("Average worst drawdown (%) - lower is better", fontsize=10)
+
+    for ax in axes:
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{int(L)}x" for L in caps])
+        ax.set_xlabel("leverage cap (settings tuned on 2024 at each cap)")
+        ax.legend(fontsize=8)
+    fig.suptitle("Choosing a risk level: the Risk Engine on unseen 2026 data at each leverage cap", fontsize=11)
+    fig.tight_layout()
+    fig.savefig(os.path.join(rb.FIGURES_DIR, f"phase5_{REPORT_NAME}_leverage.png"), dpi=200)
+
+
 def do_run():
     os.makedirs(rb.RESULTS_DIR, exist_ok=True)
     os.makedirs(rb.FIGURES_DIR, exist_ok=True)
@@ -251,10 +303,39 @@ def do_run():
         "",
         f"Figure: figures/phase5_{REPORT_NAME}.png",
     ]
+
+    menu = leverage_menu(sigs, market)
+    bh_return = bh_equity.iloc[-1] - 1
+    lines += [
+        "",
+        "## Choosing a risk level (leverage menu)",
+        "",
+        "The same Risk Engine at each leverage cap, every other setting tuned on 2024 at that",
+        "cap, then run once on the forward period. Every cap is shown - nothing picked after",
+        "the fact. Percentages are the same for any account size.",
+        "",
+        f"| Leverage cap | Average return | Best run | Worst run | Lowest point, any run (from {rb.money(rb.STARTING_CAPITAL)}) | Avg worst drawdown | Sharpe | Liquidations |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for L, r in menu.items():
+        lines.append(
+            f"| {L:.0f}x | {r['returns'].mean():+.1%} | {r['returns'].max():+.1%} | {r['returns'].min():+.1%} "
+            f"| {rb.money(r['lowest'] * rb.STARTING_CAPITAL)} | {r['mdd']:.1%} | {r['sharpe']:.2f} | {r['liquidations']} |"
+        )
+    lines += [
+        f"| Buy & hold BTC (1x) | {bh_return:+.1%} | - | - | {rb.money(bh_equity.min() * rb.STARTING_CAPITAL)} "
+        f"| {bh_metrics['max_drawdown']:.1%} | {bh_metrics['sharpe']:.2f} | - |",
+        "",
+        "More leverage widens the range of outcomes; it does not raise return per unit of",
+        "risk (Sharpe stays roughly flat until it collapses at the highest cap).",
+        "",
+        f"Figure: figures/phase5_{REPORT_NAME}_leverage.png",
+    ]
     with open(os.path.join(rb.RESULTS_DIR, f"{REPORT_NAME}.md"), "w") as f:
         f.write("\n".join(lines) + "\n")
     pd.concat({"dynamic": dyn_rows, "fixed": fix_rows}).to_csv(os.path.join(rb.RESULTS_DIR, f"{REPORT_NAME}.csv"))
     plot(dyn_runs, fix_runs, bh_equity)
+    plot_menu(menu, bh_return, bh_metrics["max_drawdown"])
     print("\n".join(lines))
 
 

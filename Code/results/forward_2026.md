@@ -51,3 +51,22 @@ Fixed-rule ablation:
 | 4 | 0.8288 | 0.2879 | -1.3341 | -2.1346 | 194 | 0 |
 
 Figure: figures/phase5_forward_2026.png
+
+## Choosing a risk level (leverage menu)
+
+The same Risk Engine at each leverage cap, every other setting tuned on 2024 at that
+cap, then run once on the forward period. Every cap is shown - nothing picked after
+the fact. Percentages are the same for any account size.
+
+| Leverage cap | Average return | Best run | Worst run | Lowest point, any run (from R1,000) | Avg worst drawdown | Sharpe | Liquidations |
+|---|---|---|---|---|---|---|---|
+| 2x | +2.4% | +15.4% | -7.7% | R875 | 8.7% | 0.35 | 0 |
+| 5x | +5.6% | +17.9% | -9.5% | R810 | 14.8% | 0.41 | 0 |
+| 10x | +9.1% | +36.3% | -22.3% | R636 | 27.7% | 0.41 | 0 |
+| 20x | -12.1% | +48.3% | -72.0% | R207 | 55.2% | -0.03 | 0 |
+| Buy & hold BTC (1x) | -5.8% | - | - | R660 | 39.6% | 0.04 | - |
+
+More leverage widens the range of outcomes; it does not raise return per unit of
+risk (Sharpe stays roughly flat until it collapses at the highest cap).
+
+Figure: figures/phase5_forward_2026_leverage.png

@@ -744,6 +744,18 @@ Started early, 2026-10-07. Plan agreed with the student, in order:
    Agent hit rate 49.3% (47.4% up days) - no directional skill out of sample.
    Zero liquidations (2x). This is the cleanest result in the project: 2025
    influenced design choices, 2026 influenced nothing.
+   **Leverage menu (added at the student's request, wanting bigger returns
+   honestly):** same Risk Engine at each stress-test cap, settings tuned on 2024 at
+   that cap, run once on 2026, ALL caps reported (`forward_test.py`, figure
+   `figures/phase5_forward_2026_leverage.png`): 2x +2.4% (worst run -7.7%, avg max
+   DD 8.7%); 5x +5.6% (-9.5%, 14.8%); 10x +9.1% (-22.3%, 27.7%); 20x -12.1% (-72.0%,
+   55.2%); buy & hold -5.8% (39.6%). Sharpe ~0.35-0.41 until it collapses at 20x -
+   leverage widens outcomes, doesn't add edge. The student was told plainly that
+   retuning on 2025/2026, changing the objective, or reporting only the best cap
+   would be cherry-picking, and agreed to the menu instead. Also discussed: the
+   Alpha Agent has no directional edge (49.3% hit rate), so real gains would need
+   a better signal, not more leverage - good future-work material, as is a
+   long-only "volatility dial" using only the Beta Agent's forecast.
    Implementation notes: `forward_test.py`
    (`fetch` / `check` / `run`) fetches 2018-01-01..2026-09-30 into
    `Code/data/forward_2026/` (frozen data never written), checks the new fetch's
