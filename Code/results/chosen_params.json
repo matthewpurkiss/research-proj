@@ -1,0 +1,16 @@
+{
+  "dynamic": {
+    "tau_j": 0.25,
+    "tau_y": 0.3333333333333333,
+    "k": 0.005,
+    "c": 1.0,
+    "l_max": 2.0,
+    "f_max": 1.0
+  },
+  "fixed": {
+    "tau_y": 0.0,
+    "fraction": 0.25,
+    "stop_distance": 0.02,
+    "leverage": 2.0
+  }
+}

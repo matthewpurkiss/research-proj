@@ -26,6 +26,7 @@ Research_Proj/                          <- repo root
   Phase1_Progress.pptx                  <- supervisor slide deck, Phase 1
   PHASE3_SUMMARY.pdf                    <- formal Phase 3 results summary
   HANDOFF.md                            <- this file
+  figures/                              <- EVERY write-up chart/diagram, indexed in figures/README.md
   Code/
     CLAUDE.md              <- project rules/conventions, READ THIS TOO
     PHASE1_SPEC.md          <- detailed Phase 1 spec, still useful reference
@@ -35,7 +36,10 @@ Research_Proj/                          <- repo root
     leakage_audit.py, test_audit_teeth.py, make_synthetic.py,
     run_pipeline.py, check_connectivity.py, eda.ipynb   <- Phase 1 pipeline (all done)
     models.py, train.py, evaluate.py, metrics.py         <- Phase 2 (all done)
-    train_beta.py, garch_baseline.py, skill_scores.py     <- Phase 3 (in progress)
+    train_beta.py, garch_baseline.py, skill_scores.py     <- Phase 3 (done)
+    risk_engine.py, backtest.py, signals.py, run_backtest.py  <- Phase 4 (done)
+    checkpoints/    <- saved Alpha + Beta weights per seed (beta files also hold Platt A, B)
+    results/        <- backtest_report.md, test_metrics.csv, chosen_params.json
     (finding-1 investigation scripts - diagnose_beta_vol.py and the five
      experiment_*.py files - were removed on 2026-10-07 when the single-day
      target became official, since they assume the old 14-day target and would
@@ -577,29 +581,101 @@ history of how it got here and some numbers in them are superseded.**
 finding 1 (item 3 above) and the freeze protocol, which depends on that conversation's
 outcome.
 
+## Phase 4 status: COMPLETE (Risk Engine + backtest, Weeks 12-13)
+
+Built 2026-10-07, following proposal Section 5.4 / 5.6.3 / 6.1.4.
+
+- **`train.py --model alpha` / `train_beta.py` now save checkpoints** to
+  `Code/checkpoints/` (Beta files include each seed's Platt A, B). Re-running both
+  reproduced the official numbers exactly (Alpha RMSE 0.02372, Beta vol 0.01974).
+- **`risk_engine.py`** - the five Section 5.4 rules as pure functions:
+  jump veto (`jump_prob > tau_j` -> flat), direction (`pred_strength < tau_y` -> flat,
+  else sign of `pred_return`), size `min(f_max, k / pred_vol)`, stop `c * pred_vol`,
+  leverage `L_max * (1 - jump_prob)`. Plus `fixed_action`, the H3 ablation: same
+  direction rule, fixed size/stop/leverage, no Beta Agent.
+- **`signals.py`** - loads seed s's Alpha + Beta and builds per-day `pred_return`,
+  `pred_strength`, `pred_vol`, `jump_prob` (Platt-scaled).
+- **`backtest.py`** - leveraged CFD simulation: enter at close t, exit at close of
+  the next weekday t' (verified to match how `alpha_target` is built). Stops and
+  liquidation are checked against every CALENDAR day's raw BTC Open/High/Low in
+  (t, t'] - weekends included, since the model trades weekdays only. Whichever of
+  stop / liquidation level is nearer the entry triggers first; gap opens fill at
+  the open. Liquidation = a trade loses its whole posted margin (loss capped there -
+  negative balance protection); liquidation rate = share of the 5 runs with >= 1.
+  Cost 0.1% of notional per round trip. Sharpe/Sortino: rf = 0, annualised x260.
+  Simulator checked against 7 hand-worked scenarios (stop, gap, liquidation, short,
+  weekend, full Fri->Mon run).
+- **`run_backtest.py`** - grid search on 2024 val (one shared setting across seeds,
+  objective = mean of Sharpe - max drawdown), then one run on 2025 test, writes
+  `Code/results/`, equity chart to `figures/phase4_equity_curves.png`. ~5 s.
+
+**Design decisions taken (all agreed with the student):** Platt-scaled jump
+probabilities feed the engine; seed s Alpha paired with seed s Beta = 5 runs;
+costs included; objective = Sharpe - MDD.
+
+**One change from the proposal's rule 2, found from results:** `tau_y` is a
+percentile level on `pred_strength` (share of the same model's previous 60
+predictions that today's |pred_return| exceeds), not a raw return size. With one
+shared raw threshold, seed 3 never traded on test and seeds 1 and 4 traded every
+day - the five Alpha seeds predict on scales up to ~5x apart, and each drifts
+between 2024 and 2025. Causal (past predictions only; window runs back across
+split boundaries); checked that changing later predictions doesn't alter earlier
+strength values.
+
+**Test results (2025-03-25 to 2025-12-31, 201 weekdays - the Alpha Agent's 60-day
+lookback uses up Jan-Mar):**
+| | Dynamic Risk Engine | Fixed-rule ablation | Buy & hold (1x) |
+|---|---|---|---|
+| Total return | 1.045 ± 0.060 | 0.931 ± 0.067 | 1.000 |
+| Max drawdown | 4.6% ± 1.1% | 17.2% ± 3.0% | 31.8% |
+| Sharpe | 0.736 ± 1.086 | -0.503 ± 0.590 | 0.190 |
+| Sortino | 1.427 ± 1.837 | -0.773 ± 0.897 | 0.274 |
+| Trades | 62.8 ± 20.9 | 201 | - |
+| Liquidation rate | 0% | 0% | - |
+
+Chosen settings - dynamic: tau_j=0.25, tau_y=1/3, k=0.005, c=1.0, L_max=2.0;
+fixed: tau_y=0, fraction=0.25, stop=2%, leverage=2.0. The engine beat the
+ablation on every seed for drawdown, Sharpe and total return.
+
+**Caveats to carry into Phase 5 and the write-up:**
+- Much of the gain is from trading less: ~63 of 201 days vs every day, and the
+  equity curves are flat for long stretches (Jun-Aug especially) - likely the jump
+  veto firing. Phase 5 should ablate rule by rule (veto / sizing / stops).
+- Validation disagreed: on 2024 the fixed rules scored better (objective 0.886 vs
+  0.213). Small samples - statistical tests are essential, not a formality.
+- Liquidation rate is uninformative: both tuned to 2x leverage, where liquidation
+  needs a ~50% move. (2:1 is the EU/UK retail cap for crypto CFDs, so this is
+  realistic.) Phase 5 should add a fixed-leverage stress test (e.g. 10x, the
+  proposal's own example) for both engines.
+- BTC ended the test window almost exactly where it started (87,472 -> 87,509),
+  after a large rise and a November fall.
+
 ## Immediate next steps, in likely order
 
-As of 2026-10-07, Phases 1-3 are complete and the data is frozen (`DATA_FREEZE.md`).
+As of 2026-10-07, Phases 1-4 are complete and the data is frozen (`DATA_FREEZE.md`).
 Findings 2-4 need no further supervisor input: Van Alten has said proposal-vs-final
 differences are fine, so finding 3 (start date 2018-02-12) and finding 4 ("closing
 price" wording) are just corrections to make in the final report's text.
 
-1. **Phase 4 (Dynamic Risk Engine + framework integration, Weeks 12-13) - next, not
-   started.** Per the proposal it's deterministic rules, not a learned model: combine
-   the Alpha Agent's return forecast with the Beta Agent's volatility and jump-risk
-   outputs into position sizing / stops, wired end to end to emit a backtest report.
-   The Beta Agent's volatility output is now usable (beats GARCH significantly on
-   4/5 seeds); its jump output should be used to rank days by risk, not as a
-   literal probability (calibration notes in Phase 3).
-2. Phase 5 (Evaluation and ablations, Weeks 14-16) - H3: full framework vs an
-   ablated version.
-3. Optional follow-up: regularise the Beta Agent's jump branch on its own (e.g.
+1. **Phase 5 (Evaluation and ablations, Weeks 14-16) - next.** H3: statistical test
+   of Dynamic Risk Engine vs fixed-rule ablation (the proposal says DM tests across
+   seeds at alpha=0.05 - needs designing for survival metrics, e.g. DM on the two
+   engines' daily return series per seed). Plus the three caveats in Phase 4's
+   section: rule-by-rule ablation (veto / sizing / stops), a fixed 10x leverage
+   stress test so liquidation rate means something, and honest handling of the
+   val/test disagreement. Proposal also lists ablations isolating attention and
+   the multivariate feature set (partly covered by Phase 2's H1/H2 results).
+2. Optional follow-up: regularise the Beta Agent's jump branch on its own (e.g.
    weight decay) to see if it gets back to beating the base rate on all seeds.
-4. Optional: regenerate `Code/PHASE2_SUMMARY.pdf` with the full MAPE table.
-5. Student's own task: tick boxes 3 and 6 on the final thesis's AI Declaration.
+3. Optional: regenerate `Code/PHASE2_SUMMARY.pdf` with the full MAPE table.
+4. Student's own task: tick boxes 3 and 6 on the final thesis's AI Declaration.
 
 ## Working conventions worth preserving
 
+- Every chart or diagram made for the project goes in `figures/` (repo root), with
+  an entry in `figures/README.md` (what it shows, which script made it, caption
+  notes), and gets committed - the student reuses them in the write-up. Scripts
+  run from `Code/` write straight to `../figures/`.
 - One file, one job (see the whole Phase 1 file layout for the pattern)
 - Every non-obvious design choice gets a comment explaining WHY, not just what
 - Real bugs found during testing get documented in commit messages, not silently

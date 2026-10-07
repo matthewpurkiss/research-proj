@@ -288,9 +288,10 @@ def platt_recalibrate(all_results, n_buckets=4):
     Recalibrated test predictions are pooled afterward for the
     calibration_check.
     """
-    all_calibrated_probs, all_labels = [], []
+    all_calibrated_probs, all_labels, platt_params = [], [], []
     for i, result in enumerate(all_results):
         A, B = fit_platt_scaling(result["val_pred_jump_logit"], result["val_jump_y"])
+        platt_params.append((A, B))
         calibrated = apply_platt_scaling(result["test_pred_jump_logit"], A, B)
         all_calibrated_probs.append(calibrated)
         all_labels.append(result["test_jump_y"])
@@ -300,7 +301,26 @@ def platt_recalibrate(all_results, n_buckets=4):
     pooled_labels = np.concatenate(all_labels)
     print("\nCalibration check AFTER Platt scaling:")
     calibration_check(pooled_calibrated, pooled_labels, n_buckets=n_buckets)
-    return pooled_calibrated, pooled_labels
+    return pooled_calibrated, pooled_labels, platt_params
+
+
+CHECKPOINT_DIR = "checkpoints"
+
+
+def checkpoint_path(seed):
+    return os.path.join(CHECKPOINT_DIR, f"beta_seed{seed}.pt")
+
+
+def save_checkpoints(all_results, platt_params, seeds=SEEDS):
+    """Saves each seed's trained weights plus its Platt scaling (A, B) in
+    one file, so the Phase 4 backtest can load a ready-to-use Beta Agent
+    whose jump probabilities are already calibrated the same way as here."""
+    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+    for seed, result, (A, B) in zip(seeds, all_results, platt_params):
+        torch.save(
+            {"state_dict": result["model"].state_dict(), "platt_A": A, "platt_B": B},
+            checkpoint_path(seed),
+        )
 
 
 if __name__ == "__main__":
@@ -308,4 +328,6 @@ if __name__ == "__main__":
     print("Beta Agent (volatility + jump-risk forecaster)")
     _, _, pooled_probs, pooled_labels, all_results = run_multi_seed(verbose=True)
     calibration_check(pooled_probs, pooled_labels)
-    platt_recalibrate(all_results)
+    _, _, platt_params = platt_recalibrate(all_results)
+    save_checkpoints(all_results, platt_params)
+    print(f"\nsaved {len(platt_params)} Beta Agent checkpoints to {CHECKPOINT_DIR}/")
