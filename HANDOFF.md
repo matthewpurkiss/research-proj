@@ -650,6 +650,48 @@ ablation on every seed for drawdown, Sharpe and total return.
 - BTC ended the test window almost exactly where it started (87,472 -> 87,509),
   after a large rise and a November fall.
 
+## Phase 5 status: IN PROGRESS (Evaluation and ablations, Weeks 14-16)
+
+Started early, 2026-10-07. Plan agreed with the student, in order:
+1. ~~Rand reporting~~ DONE - `run_backtest.py` reports balances from
+   `STARTING_CAPITAL = 1000` (R). Display only; simulation still runs on 1.0.
+   Test: Risk Engine R1,000 -> R1,045 ± R60 (lowest R968), fixed rules -> R931 ± R67
+   (lowest R884), buy & hold -> R1,000 (lowest R872). Caveats stated in the report:
+   ignores USD/ZAR and brokers' minimum trade sizes (a R1,000 account would be
+   below some brokers' 0.01 BTC minimum at these settings).
+2. ~~H3 significance test~~ DONE - `h3_tests.py`, results in
+   `Code/results/h3_tests.md`, figure `figures/phase5_h3_bootstrap.png`.
+3. Rule-by-rule ablation (veto / sizing / stops / jump-based leverage, each
+   switched off and retuned) - next.
+4. 10x leverage stress test for both engines (makes liquidation rate meaningful).
+5. Model ablations inside the framework: Alpha Agent swapped for StandardBiLSTM
+   and VanillaLSTM (needs `train.py --model bilstm` / `--model lstm` checkpoints).
+6. Optional: 2026 forward test on data never used anywhere (needs a fresh fetch,
+   student's hotspot for Blockchain.com, kept as a separate dataset so the frozen
+   one is untouched). Student said yes to including it in the plan.
+
+**H3 result (2026-10-07):**
+- Daily-return test per seed (proposal's DM test adapted: loss = negative daily
+  return, Newey-West variance, 4 lags): Risk Engine ahead on every seed
+  (+0.001% to +0.081% per day) but **not significant on any (0/5)**. Expected - it
+  sits out ~2/3 of days, so most daily differences are just the fixed rules'
+  noise. Checked: on pure noise the test's false-positive rate is 4.75%.
+- Block bootstrap (5,000 resamples, 10-day blocks, paired across engines and seeds):
+  | | Drawdown reduction | 95% interval | Sharpe gain | 95% interval |
+  |---|---|---|---|---|
+  | average of 5 seeds | **+12.6 pp** | [+7.0, +20.9], p < 0.0002 | **+1.24** | [+0.20, +2.45], p = 0.011 |
+  | per seed | significant on **5/5** | | significant on 2/5 (seeds 3, 4) | |
+- **Reading for the write-up:** H3 predicts lower drawdown and liquidation rate
+  with "comparable" Sharpe/Sortino. Drawdown: supported, strongly and on every
+  seed. Sharpe: not worse - better on average, significantly so when pooled.
+  Liquidation rate: untested until the 10x stress test (step 4). So: "supported
+  for drawdown and risk-adjusted return; liquidation pending".
+- **Limits to state:** the bootstrap captures uncertainty from which market days
+  occurred, not from model training or tuning (the settings are fixed at their
+  2024-tuned values). Validation favoured the fixed rules, which the bootstrap on
+  test can't speak to. Much of the drawdown gain comes from being out of the
+  market more (step 3 will show which rule does it).
+
 ## Immediate next steps, in likely order
 
 As of 2026-10-07, Phases 1-4 are complete and the data is frozen (`DATA_FREEZE.md`).
@@ -657,14 +699,8 @@ Findings 2-4 need no further supervisor input: Van Alten has said proposal-vs-fi
 differences are fine, so finding 3 (start date 2018-02-12) and finding 4 ("closing
 price" wording) are just corrections to make in the final report's text.
 
-1. **Phase 5 (Evaluation and ablations, Weeks 14-16) - next.** H3: statistical test
-   of Dynamic Risk Engine vs fixed-rule ablation (the proposal says DM tests across
-   seeds at alpha=0.05 - needs designing for survival metrics, e.g. DM on the two
-   engines' daily return series per seed). Plus the three caveats in Phase 4's
-   section: rule-by-rule ablation (veto / sizing / stops), a fixed 10x leverage
-   stress test so liquidation rate means something, and honest handling of the
-   val/test disagreement. Proposal also lists ablations isolating attention and
-   the multivariate feature set (partly covered by Phase 2's H1/H2 results).
+1. **Continue Phase 5** - steps 3-6 in its status section above (rule-by-rule
+   ablation next).
 2. Optional follow-up: regularise the Beta Agent's jump branch on its own (e.g.
    weight decay) to see if it gets back to beating the base rate on all seeds.
 3. Optional: regenerate `Code/PHASE2_SUMMARY.pdf` with the full MAPE table.

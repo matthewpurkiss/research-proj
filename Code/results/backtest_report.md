@@ -12,6 +12,8 @@ paired with Beta seed s). Settings tuned on 2024 validation only. Costs: 0.10% o
 
 | Metric | Dynamic Risk Engine | Fixed-rule ablation | Buy & hold BTC (1x) |
 |---|---|---|---|
+| Final balance (from R1,000) | R1,045 ± R60 | R931 ± R67 | R1,000 |
+| Lowest balance during test | R968 ± R13 | R884 ± R47 | R872 |
 | Total return (multiple) | 1.045 ± 0.060 | 0.931 ± 0.067 | 1.000 |
 | Max drawdown | 4.6% ± 1.1% | 17.2% ± 3.0% | 31.8% |
 | Sharpe | 0.736 ± 1.086 | -0.503 ± 0.590 | 0.190 |
@@ -19,7 +21,9 @@ paired with Beta seed s). Settings tuned on 2024 validation only. Costs: 0.10% o
 | Trades | 62.800 ± 20.897 | 201.000 ± 0.000 | - |
 | Liquidation rate | 0% | 0% | - |
 
-Statistical comparison of the two engines (H3) is Phase 5, not this report.
+Balances assume a R1,000 starting account; every result scales in proportion.
+They ignore USD/ZAR moves (BTC is priced in dollars) and brokers' minimum trade
+sizes, which a small account may fall below. Statistical comparison (H3): h3_tests.py.
 
 ## Per-run test metrics
 
