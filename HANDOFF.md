@@ -25,6 +25,8 @@ Research_Proj/                          <- repo root
   Annotated_Bibliography_2697424.pdf
   Phase1_Progress.pptx                  <- supervisor slide deck, Phase 1
   PHASE3_SUMMARY.pdf                    <- formal Phase 3 results summary
+  Supervisor_Update_2026-10-20.pdf      <- 17-slide deck for the 20 Oct meeting (Phases 2-5)
+  Supervisor_Update_2026-10-20_notes.md <- speaker notes for that deck, one section per slide
   HANDOFF.md                            <- this file
   figures/                              <- EVERY write-up chart/diagram, indexed in figures/README.md
   Code/
@@ -38,6 +40,7 @@ Research_Proj/                          <- repo root
     models.py, train.py, evaluate.py, metrics.py         <- Phase 2 (all done)
     train_beta.py, garch_baseline.py, skill_scores.py     <- Phase 3 (done)
     risk_engine.py, backtest.py, signals.py, run_backtest.py  <- Phase 4 (done)
+    make_figures.py <- framework diagram + volatility-target figure (from recorded results)
     checkpoints/    <- saved Alpha + Beta weights per seed (beta files also hold Platt A, B)
     results/        <- backtest_report.md, test_metrics.csv, chosen_params.json
     (finding-1 investigation scripts - diagnose_beta_vol.py and the five

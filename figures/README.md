@@ -4,6 +4,32 @@ Every chart and diagram made for the project lives here. Each entry says what th
 figure shows, which script makes it, and anything a reader needs to interpret it.
 Regenerate a figure by re-running its script from `Code/`; don't edit images by hand.
 
+## Overview
+
+### `framework_diagram.png`
+- **Shows:** the decoupled framework - daily data feeds the Alpha Agent (direction)
+  and the Beta Agent (volatility + jump risk), whose forecasts the Dynamic Risk
+  Engine's five fixed rules turn into a trade (direction, size, stop, leverage).
+- **Made by:** `Code/make_figures.py`.
+- **Notes for the caption:** reflects the final design - the Beta Agent uses two
+  independent GRUs (a deviation from the proposal's single shared GRU, Phase 3),
+  and rule 2 includes the percentile-based weak-signal filter (Phase 4).
+
+## Phase 3: Beta Agent
+
+### `phase3_volatility_target.png`
+- **Shows:** finding 1 - skill vs naive persistence ("tomorrow looks like today")
+  for every volatility-target variant tried. All five variants of the original
+  14-day rolling target lost heavily; the single-day target suggested by the
+  supervisor beat persistence (+5%).
+- **Made by:** `Code/make_figures.py`, from the confirmed results recorded in
+  `HANDOFF.md` (finding 1). The five 14-day variants came from experiment scripts
+  retired on 2026-10-07 (git history, commit 3eb8226); the single-day value is the
+  official `skill_scores.py` result.
+- **Notes for the caption:** the 14-day target shared 13 of its 14 days with an
+  input feature, so persistence won by construction; skill = 1 - RMSE / persistence
+  RMSE, 2025 test, mean of 5 seeds.
+
 ## Phase 4: backtest
 
 ### `phase4_equity_curves.png`
