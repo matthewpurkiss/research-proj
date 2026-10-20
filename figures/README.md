@@ -129,3 +129,26 @@ Regenerate a figure by re-running its script from `Code/`; don't edit images by 
   includes 50%, so nothing - the Alpha Agent or any simple rule - can be told apart
   from a coin flip. Rules that looked good in one period reversed in another (mean
   reversion: ~57% in 2024 and 2025, 43% in 2026), the signature of noise.
+
+## Simplified explainer figures (`explain_*.png`)
+
+Made by `Code/make_explainer_figures.py` for the plain-English deck
+`Project_Explained_2026-10-20.pdf`. Same numbers as the result figures above, with
+larger text and simpler labels - good for slides or the defence, while the
+`phase*` figures are the ones to use in the write-up.
+
+| File | Shows |
+|---|---|
+| `explain_btc_splits.png` | BTC price 2018-2026 with train / validation / test / forward periods shaded |
+| `explain_phase2_rmse.png` | Return-forecast error (RMSE) of LSTM, GRU, Bi-LSTM and the Alpha Agent |
+| `explain_hit_rate.png` | Direction hit rate vs the 50% coin-flip line, with 95% intervals |
+| `explain_volatility_errors.png` | Volatility-forecast error: Beta Agent vs naive persistence vs GARCH (2025, 2026) |
+| `explain_volatility_forecast.png` | Beta Agent's forecast of the daily move size vs what happened (2025) |
+| `explain_equity_2025.png` | R1,000 through 2025: Risk Engine, fixed rules, buy and hold |
+| `explain_equity_2026.png` | Same for the 2026 forward test |
+| `explain_drawdown.png` | What max drawdown means, shown on buy-and-hold BTC in 2026 |
+| `explain_worst_drop.png` | Max drawdown by strategy, 2025 and 2026 |
+| `explain_significance.png` | Bootstrap 95% intervals for the drawdown and Sharpe improvements |
+| `explain_rule_ablation.png` | Extra drawdown when each Risk Engine rule is switched off |
+| `explain_leverage_stress.png` | Max drawdown at 2x/5x/10x/20x leverage, Risk Engine vs fixed rules |
+| `explain_leverage_menu.png` | 2026 return at each leverage cap |

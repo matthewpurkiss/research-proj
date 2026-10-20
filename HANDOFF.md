@@ -27,6 +27,8 @@ Research_Proj/                          <- repo root
   PHASE3_SUMMARY.pdf                    <- formal Phase 3 results summary
   Supervisor_Update_2026-10-20.pdf      <- 17-slide deck for the 20 Oct meeting (Phases 2-5)
   Supervisor_Update_2026-10-20_notes.md <- speaker notes for that deck, one section per slide
+  Project_Explained_2026-10-20.pdf      <- 32-slide plain-English walkthrough (terms, method, every result)
+  Project_Explained_2026-10-20_notes.md <- what to say + likely questions, per slide
   HANDOFF.md                            <- this file
   figures/                              <- EVERY write-up chart/diagram, indexed in figures/README.md
   Code/
@@ -41,6 +43,7 @@ Research_Proj/                          <- repo root
     train_beta.py, garch_baseline.py, skill_scores.py     <- Phase 3 (done)
     risk_engine.py, backtest.py, signals.py, run_backtest.py  <- Phase 4 (done)
     make_figures.py <- framework diagram + volatility-target figure (from recorded results)
+    make_explainer_figures.py <- simplified explain_*.png charts for the plain-English deck
     checkpoints/    <- saved Alpha + Beta weights per seed (beta files also hold Platt A, B)
     results/        <- backtest_report.md, test_metrics.csv, chosen_params.json
     (finding-1 investigation scripts - diagnose_beta_vol.py and the five
@@ -647,7 +650,7 @@ ablation on every seed for drawdown, Sharpe and total return.
 - Validation disagreed: on 2024 the fixed rules scored better (objective 0.886 vs
   0.213). Small samples - statistical tests are essential, not a formality.
 - Liquidation rate is uninformative: both tuned to 2x leverage, where liquidation
-  needs a ~50% move. (2:1 is the EU/UK retail cap for crypto CFDs, so this is
+  needs a ~50% move. (2:1 is the EU retail cap for crypto CFDs; the UK bans them for retail, so this is
   realistic.) Phase 5 should add a fixed-leverage stress test (e.g. 10x, the
   proposal's own example) for both engines.
 - BTC ended the test window almost exactly where it started (87,472 -> 87,509),
