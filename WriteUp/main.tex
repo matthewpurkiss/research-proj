@@ -1,0 +1,88 @@
+% =====================================================================
+%  Final research report - Matthew Purkiss (2697424)
+%  Compile from this folder:  latexmk -pdf main.tex   (or Overleaf / tectonic main.tex)
+%
+%  Green "WRITE" boxes are guidance for you. They disappear from the PDF
+%  when you change \guidetrue to \guidefalse below - do that before submitting.
+% =====================================================================
+\documentclass[12pt,a4paper,oneside]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{setspace}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink,capitalise]{cleveref}
+\usepackage[authoryear,round]{natbib}
+
+\graphicspath{{../figures/}{figures/}} % works here and on Overleaf (upload the figures folder next to main.tex)
+\onehalfspacing
+
+% ---------------- guidance boxes (switch off before submitting) ------
+\newif\ifguide
+\guidetrue      % <- change to \guidefalse for the final PDF
+\ifguide
+  \newtcolorbox{guide}{colback=green!5,colframe=green!45!black,
+    fonttitle=\bfseries\small,title=WRITE,fontupper=\small,breakable}
+\else
+  \usepackage{environ}
+  \NewEnviron{guide}{}
+\fi
+% \tbc{...} marks a gap you still need to fill (shows in red)
+\newcommand{\tbc}[1]{\textcolor{red}{[TBC: #1]}}
+
+\begin{document}
+\pagenumbering{alph}
+
+% ======================= TITLE PAGE ==================================
+\begin{titlepage}
+  \centering
+  \vspace*{1.5cm}
+  {\LARGE\bfseries A DECOUPLED ATTENTION-BASED BI-LSTM FRAMEWORK WITH VOLATILITY-AWARE RISK MANAGEMENT FOR AI-DRIVEN CFD CRYPTOCURRENCY TRADING\par}
+  \vspace{2cm}
+  {\large School of Computer Science \& Applied Mathematics\\University of the Witwatersrand\par}
+  \vspace{1.5cm}
+  {\Large Matthew Purkiss\\2697424\par}
+  \vspace{1cm}
+  {\large Supervised by Clint Van Alten\par}
+  \vfill
+  {\large \tbc{submission date}\par}
+  \vspace{1cm}
+  {\normalsize A research report submitted to the Faculty of Science, University of the Witwatersrand, Johannesburg, in partial fulfilment of the requirements for the degree of Bachelor of Science with Honours\par}
+\end{titlepage}
+
+\pagenumbering{roman}
+\input{chapters/00_frontmatter}
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+\clearpage
+\pagenumbering{arabic}
+\input{chapters/01_introduction}
+\input{chapters/02_background}
+\input{chapters/03_data}
+\input{chapters/04_methodology}
+\input{chapters/05_results}
+\input{chapters/06_discussion}
+\input{chapters/07_conclusion}
+
+\nocite{placeholder} % delete this line once you cite real references
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+\input{chapters/appendix}
+
+\end{document}

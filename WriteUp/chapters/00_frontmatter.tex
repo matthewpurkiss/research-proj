@@ -1,0 +1,36 @@
+% ======================= ABSTRACT ====================================
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+\begin{guide}
+Write this LAST. One paragraph, about 250 words, no citations. Five beats, one or two sentences each:
+\begin{enumerate}
+  \item \textbf{Problem:} leveraged retail crypto CFD trading loses accounts to volatility and liquidation; most AI work only chases forecast accuracy.
+  \item \textbf{What you built:} a decoupled framework - an attention Bi-LSTM (Alpha Agent) for direction, two GRUs (Beta Agent) for volatility and jump risk, and a rule-based Dynamic Risk Engine.
+  \item \textbf{How you tested it:} 2018--2023 training, 2024 validation/tuning, 2025 test, plus an untouched 2026 forward test; bootstrap significance tests; rule and leverage ablations.
+  \item \textbf{Results (with numbers):} direction is no better than a coin flip (pooled hit rate 50.2\%); the volatility forecast beats persistence and GARCH; the Risk Engine cut max drawdown by 12.6 pp in 2025 and 14.1 pp in 2026 (both significant) without lowering Sharpe.
+  \item \textbf{Takeaway:} the value is in risk control, not prediction.
+\end{enumerate}
+\end{guide}
+
+\tbc{abstract}
+
+% ======================= DECLARATION =================================
+\chapter*{Declaration}
+\addcontentsline{toc}{chapter}{Declaration}
+
+I, Matthew Purkiss, hereby declare the contents of this research report to be my own work. This report is submitted for the degree of Bachelor of Science with Honours in Computer Science at the University of the Witwatersrand. This work has not been submitted to any other university, or for any other degree.
+
+\vspace{2cm}
+\noindent\rule{6cm}{0.4pt}\\
+Matthew Purkiss \hfill Date: \tbc{date}
+
+\begin{guide}
+Check the exact declaration wording the School wants (copy it from the proposal if it was specified there). If the School requires an AI-use declaration, add it as its own short section here: say which tools you used and for what (e.g.\ coding help, figures, editing), and that the analysis and conclusions are your own.
+\end{guide}
+
+% ======================= ACKNOWLEDGEMENTS ============================
+\chapter*{Acknowledgements}
+\addcontentsline{toc}{chapter}{Acknowledgements}
+
+\tbc{thank Clint Van Alten - in particular his suggestion of the single-day volatility target}

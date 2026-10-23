@@ -1,0 +1,53 @@
+\chapter{Discussion}\label{ch:discussion}
+
+\begin{guide}
+About 5--6 pages. This is where marks for understanding are earned: explain \emph{why} the results came out as they did, what they mean, and how far they can be trusted. Do not repeat tables - refer to them.
+\end{guide}
+
+\section{Where the value comes from: risk, not prediction}
+\begin{guide}
+Direction is a coin flip (\cref{tab:direction}), yet the Risk Engine cut drawdown in both test periods. Explain the mechanism: the engine decides \emph{when} and \emph{how much} to be exposed (it traded on 63 of 201 days in 2025 against 201 for fixed rules), sizes down and widens stops when volatility is forecast high, and stays out on high jump-risk days. With a near-random direction, smaller and fewer bets mean smaller losses. Link to the efficient-market view of daily returns and to volatility clustering - volatility is forecastable even when returns are not.
+\end{guide}
+\tbc{}
+
+\section{The volatility target}
+\begin{guide}
+Why the 14-day target failed (overlapping windows + the same quantity used as an input, so persistence wins by construction) and why the single-day target is the honest one. Lesson for others: always check a forecast against persistence before trusting its RMSE.
+\end{guide}
+\tbc{}
+
+\section{Interpreting H1 and H2}
+\tbc{why more features and attention barely help next-day returns: low signal-to-noise, small dataset (about 1{,}500 training days), training instability of deeper RNNs}
+
+\section{The liquidation result}
+\begin{guide}
+Why H3's liquidation claim failed, and the design lesson: a stop must always sit inside the liquidation distance (e.g.\ cap stop distance at 80\% of $1/L$). Make clear the engine was deliberately NOT changed after seeing this, because it was designed and tuned before the result - changing it would be tuning on the test set.
+\end{guide}
+\tbc{}
+
+\section{Deviations from the proposal}\label{sec:deviations}
+\begin{guide}
+A table or list: proposal said X, report did Y, because Z. At least:
+\begin{itemize}
+  \item volatility target: 14-day rolling volatility $\to$ single-day $|r_{t+1}|$ (supervisor's suggestion, \cref{sec:vol-target});
+  \item an extra untouched 2026 forward test was added;
+  \item extra statistical tests (block bootstrap) and ablations (rule-by-rule, leverage stress, forecaster swap, direction baselines);
+  \item \tbc{the ``closing price'' vs log-return wording mismatch in the proposal (H1 / Section 5.1 vs 5.2)};
+  \item \tbc{anything else - check the proposal's Methodology and Evaluation sections line by line}.
+\end{itemize}
+\end{guide}
+\tbc{}
+
+\section{Limitations}
+\begin{guide}
+Be specific and honest - examiners reward this:
+\begin{itemize}
+  \item one asset (BTC), one test year plus nine forward months; results vary a lot across seeds (Sharpe std about 1);
+  \item stops fill without slippage and weekend gaps are rare in the sample, so live risk is understated;
+  \item funding/overnight financing costs of CFDs are not modelled \tbc{check};
+  \item results are in rand from a dollar-priced asset, ignoring USD/ZAR moves and broker minimum trade sizes;
+  \item the Beta Agent's volatility forecast is biased high and only weakly ranks days (correlation 0.19);
+  \item the Sharpe gain in 2026 is not significant, and absolute returns are small (+4.5\% in 2025, +2.4\% in 2026 at 2x).
+\end{itemize}
+\end{guide}
+\tbc{}

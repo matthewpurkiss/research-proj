@@ -1,0 +1,48 @@
+\chapter{Introduction}\label{ch:intro}
+
+\begin{guide}
+About 3--4 pages. Much of this can be adapted from the proposal's Introduction, but rewrite it in the past tense (``this project built\ldots'', not ``will build'') and make sure every claim here matches what the results actually show.
+\end{guide}
+
+\section{Motivation}
+\begin{guide}
+Why this matters: crypto CFDs let retail traders use leverage on a market that moves 5--10\% in a day, so one bad day can wipe an account (liquidation). Most deep-learning trading papers report forecast accuracy (RMSE, MAPE) and stop there, but accuracy does not stop liquidation. Your angle: separate ``which way'' from ``how risky'', and let risk drive position size, stop and leverage.
+\end{guide}
+\tbc{}
+
+\section{Problem statement}
+\begin{guide}
+One paragraph, ending in a single clear research question, e.g.\ ``Can a decoupled framework, in which a volatility forecast drives the risk rules, reduce drawdown and liquidation risk in leveraged BTC CFD trading compared with fixed risk rules, without lowering risk-adjusted returns?''
+\end{guide}
+\tbc{}
+
+\section{Aims and hypotheses}\label{sec:hypotheses}
+\begin{guide}
+Copy H1--H3 \emph{word for word} from the proposal (Research Hypotheses section) so the examiner can match them. In plain terms they are:
+\begin{itemize}
+  \item \textbf{H1} multivariate inputs (19 features) forecast better than BTC's own price history alone;
+  \item \textbf{H2} adding attention to the Bi-LSTM forecasts better than the same Bi-LSTM without it;
+  \item \textbf{H3} (main) risk rules driven by the volatility forecast reduce drawdown and liquidations compared with fixed rules, without worse risk-adjusted returns.
+\end{itemize}
+\end{guide}
+\begin{description}
+  \item[H1] \tbc{exact wording from proposal}
+  \item[H2] \tbc{}
+  \item[H3] \tbc{}
+\end{description}
+
+\section{Contributions}
+\begin{guide}
+A bullet list of what is genuinely yours. Suggested (only keep what you are comfortable defending):
+\begin{itemize}
+  \item a decoupled Alpha/Beta/Risk-Engine framework for leveraged BTC CFD trading, evaluated end to end in a realistic CFD backtest (weekend gaps, liquidation, costs);
+  \item evidence that a 14-day rolling volatility target is a trap (persistence wins by construction), and that a single-day target fixes it;
+  \item a statistically tested result that volatility-aware rules cut max drawdown in both a held-out 2025 test and an untouched 2026 forward test;
+  \item an honest negative result: no model, nor any simple rule, beat a coin flip on direction;
+  \item a design lesson from the leverage stress test: volatility-widened stops must be capped below the liquidation distance.
+\end{itemize}
+\end{guide}
+\tbc{}
+
+\section{Report outline}
+\tbc{one sentence per chapter: \cref{ch:background} \ldots \cref{ch:conclusion}}
