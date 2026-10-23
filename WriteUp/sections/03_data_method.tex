@@ -1,0 +1,73 @@
+\section{Data and Methodology}\label{sec:method}
+
+\begin{guide}
+\textbf{About 3 pages, including \cref{fig:framework} and \cref{tab:splits}.} Describe what was \emph{done}, not what was planned. Put detail that would break the page budget (feature list, architectures, hyperparameters, tuning grid) in the appendix and refer to it.
+\end{guide}
+
+\subsection{Data}\label{sec:data}
+\begin{guide}
+\textbf{About half a page.} In one paragraph: daily data 2018--2025, 19 features (BTC/ETH returns, S\&P 500, gold, dollar index, VIX, realised volatility, cross-asset correlations, on-chain and volume features; full list in \cref{app:features}); normalisation fitted on training data only; chronological splits in \cref{tab:splits}.
+
+In a second paragraph, the integrity checks, which are a strength: a leakage audit (9/9 checks passed), a mutation test (6/6 planted leaks caught), and a SHA-256 data freeze (tag \texttt{data-freeze-2026-10-07}) so every number is reproducible.
+\end{guide}
+\tbc{}
+
+\begin{table}[ht]
+  \centering
+  \caption{Chronological data splits.}
+  \label{tab:splits}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    Split & Period & Used for \\
+    \midrule
+    Training   & 2018 -- 2023 & fitting all models \\
+    Validation & 2024 & early stopping, calibration, Risk Engine tuning \\
+    Test       & 2025 & reported results (used once) \\
+    Forward    & Jan -- Sep 2026 & untouched out-of-sample check, nothing retuned \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{The decoupled framework}
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{framework_diagram.png}
+  \caption{The decoupled framework: direction and risk are forecast by separate models, then combined by fixed rules.}
+  \label{fig:framework}
+\end{figure}
+
+\begin{guide}
+\textbf{About 1 page.} One short paragraph per component, referring to \cref{fig:framework}:
+\begin{itemize}
+  \item \textbf{Alpha Agent:} Bi-LSTM over a 60-day window, then single-head attention (query = last step, keys/values = the whole window), predicting the next-day log-return $\hat r_{t+1}$. Give the attention formula in one line.
+  \item \textbf{Beta Agent:} two independent 32-unit GRUs over 30 days. One predicts the size of the next day's move $|r_{t+1}|$; the other gives a jump probability (move beyond 3 standard deviations), calibrated with Platt scaling on 2024.
+  \item \textbf{Volatility target} (two or three sentences, as it is a finding): the proposal's 14-day rolling volatility shares 13 of 14 days with today's value, which was also an input, so persistence wins by construction. On the supervisor's suggestion the target became $|r_{t+1}|$ (\cref{sec:res-vol}).
+  \item \textbf{Baselines:} vanilla LSTM and GRU (univariate), Bi-LSTM without attention, a univariate Bi-LSTM for a clean H1 test; persistence and GARCH(1,1) for volatility.
+\end{itemize}
+Training in one sentence: Adam, early stopping on 2024, 5 seeds per model, results reported as mean $\pm$ std (details in \cref{app:hyper}).
+\end{guide}
+\tbc{}
+
+\subsection{The Dynamic Risk Engine}\label{sec:risk-engine}
+\begin{guide}
+\textbf{About half a page.} The five rules as a compact numbered list with their formulas:
+(1) jump veto, no trade if $\hat p_{\text{jump}} > \tau_j$;
+(2) trade the forecast's sign only if $|\hat r_{t+1}|$ is above the $\tau_y$ percentile of recent forecasts;
+(3) size $= k/\hat\sigma_{t+1}$;
+(4) stop $= c\,\hat\sigma_{t+1}$;
+(5) leverage $= L_{\max}(1-\hat p_{\text{jump}})$.
+Then the \textbf{fixed-rule baseline} for H3: the same system with the Beta Agent removed (fixed size, stop and leverage, no veto), tuned the same way.
+\end{guide}
+\tbc{}
+
+\subsection{Backtest and evaluation}\label{sec:evaluation}
+\begin{guide}
+\textbf{About 1 page.}
+\begin{itemize}
+  \item \textbf{Backtest rules:} R1{,}000 start; one decision per weekday; stops and liquidation checked on every calendar day's high/low, weekends included; 0.1\% round-trip cost; liquidation loses the margin; 2x leverage cap (the EU retail cap), with 5x, 10x and 20x in a stress test; settings tuned on 2024 by grid search (objective Sharpe $-$ max drawdown), then frozen.
+  \item \textbf{Metrics}, each defined in one line: RMSE; hit rate with Wilson intervals; max drawdown $\max_t(1 - V_t/\max_{s\le t}V_s)$; Sharpe $\sqrt{260}\,\bar r/s_r$ with zero risk-free rate.
+  \item \textbf{Significance:} Diebold--Mariano tests for forecasts; for trading, a paired moving-block bootstrap (5{,}000 resamples, 10-day blocks, because daily returns are not independent) giving 95\% intervals and one-sided $p$-values.
+\end{itemize}
+\end{guide}
+\tbc{}

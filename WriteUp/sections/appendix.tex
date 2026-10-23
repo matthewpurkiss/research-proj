@@ -1,0 +1,31 @@
+\section{Features}\label{app:features}
+\tbc{table of the 19 features in $X_t$ - from the proposal / Phase 1}
+
+\section{Models, training and settings}\label{app:hyper}
+
+\tbc{architecture table (from HANDOFF.md): Vanilla LSTM 1$\times$64; GRU 1$\times$74; Bi-LSTM 2 layers $\times$ 64 per direction, dropout 0.2; Alpha Agent = Bi-LSTM + attention, 60-day window; Beta Agent 2 $\times$ GRU(32), 30-day window. Training: Adam lr $10^{-3}$, batch 64, early stopping after 10 stagnant epochs, LR halved after 5, gradient clipping 1.0, seeds 0--4. Also the tuning grid searched.}
+
+\begin{table}[ht]
+  \centering
+  \caption{Risk Engine settings chosen on 2024 validation (\texttt{Code/results/chosen\_params.json}).}
+  \label{tab:chosen}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    Dynamic Risk Engine & $\tau_j = 0.25$, $\tau_y = 0.33$, $k = 0.005$, $c = 1.0$, $L_{\max} = 2$ \\
+    Fixed rules & $\tau_y = 0$, position fraction 0.25, stop 2\%, leverage 2 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Additional figures}
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.85\textwidth]{phase5_direction_baselines.png}
+  \caption{Next-day direction hit rate with 95\% intervals for the Alpha Agent and untrained rules; dashed line = 50\%.}
+  \label{fig:direction}
+\end{figure}
+\tbc{optional extra figures (leverage stress, rule ablation, leverage menu) - only include what the main text refers to}
+
+\section{Reproducibility}
+\tbc{repository layout, the order to run the scripts (from HANDOFF.md), package versions, data-freeze tag and checksum verification}

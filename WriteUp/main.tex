@@ -1,11 +1,15 @@
 % =====================================================================
 %  Final research report - Matthew Purkiss (2697424)
-%  Compile from this folder:  latexmk -pdf main.tex   (or Overleaf / tectonic main.tex)
+%  Target: 8-12 pages of content (Introduction to Conclusion), excluding
+%  title page, abstract, declaration, contents, references and appendix.
 %
-%  Green "WRITE" boxes are guidance for you. They disappear from the PDF
-%  when you change \guidetrue to \guidefalse below - do that before submitting.
+%  Compile from this folder:  tectonic main.tex   or   latexmk -pdf main.tex   (or Overleaf)
+%
+%  Green "WRITE" boxes are guidance for you, with a page budget per section.
+%  They disappear when you change \guidetrue to \guidefalse below - do that
+%  before submitting, and check the page count with them switched off.
 % =====================================================================
-\documentclass[12pt,a4paper,oneside]{report}
+\documentclass[11pt,a4paper]{article}
 
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
@@ -16,17 +20,19 @@
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{tabularx}
-\usepackage{multirow}
 \usepackage{xcolor}
 \usepackage[most]{tcolorbox}
-\usepackage{caption}
+\usepackage[font=small,labelfont=bf]{caption}
 \usepackage{subcaption}
 \usepackage[hidelinks]{hyperref}
 \usepackage[nameinlink,capitalise]{cleveref}
 \usepackage[authoryear,round]{natbib}
+\usepackage{environ}
 
 \graphicspath{{../figures/}{figures/}} % works here and on Overleaf (upload the figures folder next to main.tex)
-\onehalfspacing
+\setstretch{1.15}
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
 
 % ---------------- guidance boxes (switch off before submitting) ------
 \newif\ifguide
@@ -35,7 +41,6 @@
   \newtcolorbox{guide}{colback=green!5,colframe=green!45!black,
     fonttitle=\bfseries\small,title=WRITE,fontupper=\small,breakable}
 \else
-  \usepackage{environ}
   \NewEnviron{guide}{}
 \fi
 % \tbc{...} marks a gap you still need to fill (shows in red)
@@ -62,27 +67,25 @@
 \end{titlepage}
 
 \pagenumbering{roman}
-\input{chapters/00_frontmatter}
-
-\tableofcontents
-\listoffigures
-\listoftables
+\input{sections/00_frontmatter}
 
 \clearpage
 \pagenumbering{arabic}
-\input{chapters/01_introduction}
-\input{chapters/02_background}
-\input{chapters/03_data}
-\input{chapters/04_methodology}
-\input{chapters/05_results}
-\input{chapters/06_discussion}
-\input{chapters/07_conclusion}
+% ---------------- 8-12 pages of content start here -------------------
+\input{sections/01_introduction}   % ~1 page
+\input{sections/02_background}     % ~1.5-2 pages
+\input{sections/03_data_method}    % ~3 pages
+\input{sections/04_results}        % ~3-4 pages
+\input{sections/05_discussion}     % ~1.5 pages
+\input{sections/06_conclusion}     % ~0.5 page
+% ---------------- content ends here ----------------------------------
 
+\clearpage
 \nocite{placeholder} % delete this line once you cite real references
 \bibliographystyle{plainnat}
 \bibliography{references}
 
 \appendix
-\input{chapters/appendix}
+\input{sections/appendix}
 
 \end{document}

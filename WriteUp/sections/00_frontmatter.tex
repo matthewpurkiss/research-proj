@@ -1,0 +1,34 @@
+% ======================= ABSTRACT ====================================
+\section*{Abstract}
+
+\begin{guide}
+Write this LAST. One paragraph, about 200 words, no citations. One or two sentences each on:
+\begin{enumerate}
+  \item \textbf{Problem:} leveraged retail crypto CFD trading loses accounts to volatility and liquidation, and most AI work only chases forecast accuracy.
+  \item \textbf{What you built:} a decoupled framework. An attention Bi-LSTM (Alpha Agent) forecasts direction, two GRUs (Beta Agent) forecast volatility and jump risk, and a rule-based Dynamic Risk Engine turns both into trades.
+  \item \textbf{How you tested it:} 2025 test year plus an untouched 2026 forward test, against fixed risk rules, with bootstrap significance tests.
+  \item \textbf{Results, with numbers:} direction is no better than a coin flip (50.2\%); the volatility forecast beats persistence and GARCH; the Risk Engine cut max drawdown by 12.6 pp (2025) and 14.1 pp (2026), both significant, without lowering Sharpe.
+  \item \textbf{Takeaway:} the value is in risk control, not prediction.
+\end{enumerate}
+\end{guide}
+
+\tbc{abstract}
+
+% ======================= DECLARATION =================================
+\section*{Declaration}
+
+I, Matthew Purkiss, hereby declare the contents of this research report to be my own work. This report is submitted for the degree of Bachelor of Science with Honours in Computer Science at the University of the Witwatersrand. This work has not been submitted to any other university, or for any other degree.
+
+\vspace{1.5cm}
+\noindent\rule{6cm}{0.4pt}\\
+Matthew Purkiss \hfill Date: \tbc{date}
+
+\begin{guide}
+Check the exact declaration wording the School wants. If an AI-use declaration is required, add it here: which tools you used and for what (coding help, figures, editing), and that the analysis and conclusions are your own.
+\end{guide}
+
+\section*{Acknowledgements}
+\tbc{thank Clint Van Alten, in particular for the single-day volatility target}
+
+\clearpage
+\tableofcontents
