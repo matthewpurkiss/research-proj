@@ -845,3 +845,31 @@ price" wording) are just corrections to make in the final report's text.
 - Naive-baseline checks (MAPE vs "predict no change", jump BCE vs "predict base
   rate") have repeatedly caught metrics that looked good but weren't - keep doing this
   for any new metric introduced
+
+## GARCH comparison corrected (2026-11-02)
+
+`garch_baseline.py` scores GARCH's conditional sigma against |r(t+1)|, but for
+roughly normal returns E|r| = sqrt(2/pi) * sigma (~0.8 sigma), so raw GARCH is
+~25% too high for this target and the old "Beta Agent beats GARCH" result was a
+scale artefact. `garch_scale_check.py` (student's run, 2026-11-02), 2025 test,
+same days and per-seed DM tests as `skill_scores.py`:
+| Forecast | RMSE |
+|---|---|
+| Persistence | 0.02079 |
+| GARCH raw sigma | 0.02246 |
+| GARCH x sqrt(2/pi) (nothing fitted) | 0.01825 |
+| GARCH x 0.643 (fitted on 2024) | 0.01638 |
+| Beta Agent | 0.01974 +/- 0.00128 |
+| Beta Agent x per-seed 2024 scale (0.87-0.95) | 0.01827 +/- 0.00064 |
+Scaled Beta beats persistence on 4/5 seeds (significant); scaled GARCH beats
+scaled Beta on 5/5 seeds (significant, ~11.6%). Conclusion for the write-up: a
+rescaled GARCH(1,1) forecasts daily BTC volatility better than the Beta Agent.
+Trading results are unaffected. Untested follow-up: Risk Engine with scaled
+GARCH as its volatility input. `train_beta.py` now also returns val_pred_vol /
+val_vol_y (no change to training or other outputs).
+
+Also found while fact-checking the report's literature claims (2026-11-02):
+Hansun et al. (2022) "multivariate" = each coin's own OHLCV, not several coins,
+and no univariate comparison; Chen & Huang (2021) detect jumps with the Lee &
+Mykland test, not a 3-sd/30-day rule (the project's rule is a simplification);
+Subawa et al. (2025) is a survey study. The proposal had the first two wrong too.

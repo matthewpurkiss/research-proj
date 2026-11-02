@@ -10,7 +10,7 @@ From these I built 19 features, the same set as in the proposal (\cref{app:featu
 
 \subsection{Targets}
 
-Each row has three targets, all for the next trading day. The Alpha Agent predicts the log-return $r_{t+1}$. The Beta Agent predicts the size of the move $|r_{t+1}|$, and whether day $t+1$ is a jump, meaning its absolute return is more than three standard deviations of the previous 30 days' returns \cite{chen2021jump}. Jumps are rare. They make up 2.48\% of all days, 2.67\% of the training and validation years and only 1.15\% of 2025.
+Each row has three targets, all for the next trading day. The Alpha Agent predicts the log-return $r_{t+1}$. The Beta Agent predicts the size of the move $|r_{t+1}|$, and whether day $t+1$ is a jump, meaning its absolute return is more than three standard deviations of the previous 30 days' returns. This is a simpler stand-in for the statistical jump test used by Chen and Huang \cite{chen2021jump}. Jumps are rare. They make up 2.48\% of all days, 2.67\% of the training and validation years and only 1.15\% of 2025.
 
 The proposal used Bitcoin's 14-day realised volatility at $t+1$ as the volatility target. That target was dropped for the single-day size $|r_{t+1}|$, for reasons explained in \cref{sec:vol-target}.
 

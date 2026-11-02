@@ -187,6 +187,10 @@ def train_one_seed(seed, hidden_size=32, max_epochs=100, patience=10, lr_patienc
         "test_jump_y": test_jump.numpy(),
         "val_pred_jump_logit": val_pred_jump_logit.numpy(),
         "val_jump_y": val_jump.numpy(),
+        # validation volatility predictions, for garch_scale_check.py's
+        # scale correction (fitted on validation, applied to test)
+        "val_pred_vol": val_pred_vol.numpy(),
+        "val_vol_y": val_vol.numpy(),
     }
 
 

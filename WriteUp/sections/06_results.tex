@@ -66,24 +66,31 @@ Several Alpha seeds barely made a directional call at all. On the 2025 test, see
 
 \begin{table}[!t]
   \centering
-  \caption{Volatility forecast error, RMSE against the size of the next day's move}
+  \caption{Volatility forecast error, RMSE against the size of the next day's move. Scaled rows multiply the forecast by a constant fitted on 2024 only. 2026 was only run for the unscaled Beta Agent}
   \label{tab:vol}
   \footnotesize
-  \setlength{\tabcolsep}{4pt}
+  \setlength{\tabcolsep}{3pt}
   \begin{tabular}{@{}lcc@{}}
     \toprule
     Method & 2025 test & 2026 forward \\
     \midrule
-    Persistence (today's move) & 0.02079 & 0.02500 \\
-    GARCH(1,1)                 & 0.02246 & n/a \\
-    Beta Agent                 & $0.01974 \pm 0.00128$ & $0.02038 \pm 0.00101$ \\
+    Persistence (today's move)       & 0.02079 & 0.02500 \\
+    GARCH(1,1), raw $\sigma$         & 0.02246 & n/a \\
+    GARCH(1,1) $\times\sqrt{2/\pi}$ & 0.01825 & n/a \\
+    GARCH(1,1), scaled on 2024       & 0.01638 & n/a \\
+    Beta Agent                       & $0.01974 \pm 0.00128$ & $0.02038 \pm 0.00101$ \\
+    Beta Agent, scaled on 2024       & $0.01827 \pm 0.00064$ & n/a \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \Cref{fig:vol-target} sums up the volatility target problem from \cref{sec:vol-target}. Every 14-day variant lost to persistence by between 400\% and 770\%, while the single-day target gave a small positive skill.
 
-With the single-day target (\cref{tab:vol}), the Beta Agent's 2025 RMSE was 5.0\% lower than persistence. It was better on four of five seeds, but the difference was not significant on any one seed. Against GARCH(1,1) it was 12.1\% better, and significantly so on four of five seeds ($p<0.0001$), with the fifth a tie. On the 2026 data the gap to persistence widened to 18\%. GARCH was not rerun for 2026.
+With the single-day target (\cref{tab:vol}), the Beta Agent's 2025 RMSE was 5.0\% lower than persistence. It was better on four of five seeds, but the difference was not significant on any one seed. On the 2026 data the gap to persistence widened to 18\%.
+
+The comparison with GARCH(1,1) needs more care, and my first version of it was wrong. GARCH forecasts the standard deviation $\sigma$ of tomorrow's return, while the target is the absolute return $|r_{t+1}|$. These are not the same quantity. If returns are roughly normal, the expected absolute return is only $\sqrt{2/\pi}\,\sigma \approx 0.8\sigma$, so the raw GARCH forecast is about 25\% too high for this target. Scored that way, the Beta Agent looked 12.1\% better than GARCH, significantly on four of five seeds. Once GARCH is put on the right scale, the result reverses. Multiplying by $\sqrt{2/\pi}$, which fits nothing to the data, brought its RMSE down to 0.01825, already better than the Beta Agent and significantly so on three seeds. A scale fitted on 2024 (0.643) brought it to 0.01638.
+
+The Beta Agent's forecasts were also biased upwards, so the fair comparison gives both models the same correction. Each Beta seed was multiplied by a scale fitted on its own 2024 predictions (between 0.87 and 0.95), which lowered its RMSE to 0.01827. That version beat persistence by 12.1\%, significantly on four of five seeds. GARCH was still better by 11.6\%, and significantly so on all five ($p \le 0.027$). On this evidence, a one-line GARCH(1,1) model forecasts Bitcoin's daily volatility better than the Beta Agent does.
 
 These numbers look small because the target is noisy. The size of a single day's move is mostly luck, even when the true volatility is known, so no forecast can come close to it day by day. The fair question is whether the forecast tells calm days from wild ones. Here the Beta Agent is weaker than its RMSE suggests. On the 2025 backtest days its forecasts averaged 3.0\% while the actual moves averaged 1.78\%, so it was biased upwards, probably because the training years were more volatile than 2025. Its correlation with the actual move was only 0.19. When days were split into thirds by forecast, the actual average move went from 1.62\% on the calmest third to 1.83\% and then 1.90\% on the wildest. The ranking is right, but the separation is small.
 

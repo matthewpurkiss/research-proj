@@ -1,0 +1,84 @@
+device: mps
+seed 0: test vol RMSE=0.01906  test jump BCE=1.5117
+seed 1: test vol RMSE=0.01901  test jump BCE=1.3165
+seed 2: test vol RMSE=0.01927  test jump BCE=1.8571
+seed 3: test vol RMSE=0.01908  test jump BCE=1.3383
+seed 4: test vol RMSE=0.02231  test jump BCE=1.9529
+
+vol RMSE mean +/- std: 0.01974 +/- 0.00128
+jump BCE mean +/- std: 1.5953 +/- 0.2635
+naive baseline (always predict the 2.7224% base rate): jump BCE=1.6995
+
+scale factors: sqrt(2/pi) = 0.798, fitted on 2024 validation = 0.643
+
+Beta Agent vs naive persistence (baseline RMSE=0.02079)
+------------------------------------------------------------------------
+  seed 0: Beta RMSE=0.01906  skill=+8.3%  DM=-1.572  p=0.1173  (not significant)
+  seed 1: Beta RMSE=0.01901  skill=+8.6%  DM=-1.581  p=0.1152  (not significant)
+  seed 2: Beta RMSE=0.01927  skill=+7.3%  DM=-1.382  p=0.1684  (not significant)
+  seed 3: Beta RMSE=0.01908  skill=+8.2%  DM=-1.530  p=0.1274  (not significant)
+  seed 4: Beta RMSE=0.02231  skill=-7.3%  DM=+1.315  p=0.1898  (not significant)
+
+skill score mean +/- std: +5.0% +/- 6.2%
+significant at alpha=0.05: Beta Agent better on 0, naive persistence better on 0, of 5 seeds
+
+Beta Agent vs GARCH(1,1) raw sigma (baseline RMSE=0.02246)
+------------------------------------------------------------------------
+  seed 0: Beta RMSE=0.01906  skill=+15.1%  DM=-8.037  p=0.0000  (significant, Beta Agent better)
+  seed 1: Beta RMSE=0.01901  skill=+15.4%  DM=-6.361  p=0.0000  (significant, Beta Agent better)
+  seed 2: Beta RMSE=0.01927  skill=+14.2%  DM=-7.573  p=0.0000  (significant, Beta Agent better)
+  seed 3: Beta RMSE=0.01908  skill=+15.1%  DM=-7.599  p=0.0000  (significant, Beta Agent better)
+  seed 4: Beta RMSE=0.02231  skill=+0.7%  DM=-0.351  p=0.7256  (not significant)
+
+skill score mean +/- std: +12.1% +/- 5.7%
+significant at alpha=0.05: Beta Agent better on 4, GARCH(1,1) raw sigma better on 0, of 5 seeds
+
+Beta Agent vs GARCH(1,1) x sqrt(2/pi) (baseline RMSE=0.01825)
+------------------------------------------------------------------------
+  seed 0: Beta RMSE=0.01906  skill=-4.4%  DM=+2.021  p=0.0444  (significant, GARCH(1,1) x sqrt(2/pi) better)
+  seed 1: Beta RMSE=0.01901  skill=-4.1%  DM=+1.191  p=0.2350  (not significant)
+  seed 2: Beta RMSE=0.01927  skill=-5.5%  DM=+2.543  p=0.0116  (significant, GARCH(1,1) x sqrt(2/pi) better)
+  seed 3: Beta RMSE=0.01908  skill=-4.5%  DM=+1.917  p=0.0564  (not significant)
+  seed 4: Beta RMSE=0.02231  skill=-22.2%  DM=+7.544  p=0.0000  (significant, GARCH(1,1) x sqrt(2/pi) better)
+
+skill score mean +/- std: -8.2% +/- 7.0%
+significant at alpha=0.05: Beta Agent better on 0, GARCH(1,1) x sqrt(2/pi) better on 3, of 5 seeds
+
+Beta Agent vs GARCH(1,1) x validation scale (baseline RMSE=0.01638)
+------------------------------------------------------------------------
+  seed 0: Beta RMSE=0.01906  skill=-16.3%  DM=+4.365  p=0.0000  (significant, GARCH(1,1) x validation scale better)
+  seed 1: Beta RMSE=0.01901  skill=-16.0%  DM=+3.092  p=0.0022  (significant, GARCH(1,1) x validation scale better)
+  seed 2: Beta RMSE=0.01927  skill=-17.6%  DM=+4.700  p=0.0000  (significant, GARCH(1,1) x validation scale better)
+  seed 3: Beta RMSE=0.01908  skill=-16.5%  DM=+4.219  p=0.0000  (significant, GARCH(1,1) x validation scale better)
+  seed 4: Beta RMSE=0.02231  skill=-36.2%  DM=+7.764  p=0.0000  (significant, GARCH(1,1) x validation scale better)
+
+skill score mean +/- std: -20.5% +/- 7.8%
+significant at alpha=0.05: Beta Agent better on 0, GARCH(1,1) x validation scale better on 5, of 5 seeds
+Beta Agent validation scale: 0.949 -> scaled test RMSE 0.01827
+Beta Agent validation scale: 0.951 -> scaled test RMSE 0.01814
+Beta Agent validation scale: 0.902 -> scaled test RMSE 0.01777
+Beta Agent validation scale: 0.909 -> scaled test RMSE 0.01771
+Beta Agent validation scale: 0.868 -> scaled test RMSE 0.01949
+scaled Beta Agent test vol RMSE mean +/- std: 0.01827 +/- 0.00064
+
+Beta Agent vs naive persistence [Beta scaled] (baseline RMSE=0.02079)
+------------------------------------------------------------------------
+  seed 0: Beta RMSE=0.01827  skill=+12.1%  DM=-2.307  p=0.0220  (significant, Beta Agent better)
+  seed 1: Beta RMSE=0.01814  skill=+12.7%  DM=-2.369  p=0.0187  (significant, Beta Agent better)
+  seed 2: Beta RMSE=0.01777  skill=+14.5%  DM=-2.782  p=0.0058  (significant, Beta Agent better)
+  seed 3: Beta RMSE=0.01771  skill=+14.8%  DM=-2.801  p=0.0055  (significant, Beta Agent better)
+  seed 4: Beta RMSE=0.01949  skill=+6.3%  DM=-1.169  p=0.2434  (not significant)
+
+skill score mean +/- std: +12.1% +/- 3.1%
+significant at alpha=0.05: Beta Agent better on 4, naive persistence [Beta scaled] better on 0, of 5 seeds
+
+Beta Agent vs GARCH(1,1) x validation scale [Beta scaled] (baseline RMSE=0.01638)
+------------------------------------------------------------------------
+  seed 0: Beta RMSE=0.01827  skill=-11.5%  DM=+3.506  p=0.0005  (significant, GARCH(1,1) x validation scale [Beta scaled] better)
+  seed 1: Beta RMSE=0.01814  skill=-10.7%  DM=+2.225  p=0.0271  (significant, GARCH(1,1) x validation scale [Beta scaled] better)
+  seed 2: Beta RMSE=0.01777  skill=-8.4%  DM=+2.927  p=0.0038  (significant, GARCH(1,1) x validation scale [Beta scaled] better)
+  seed 3: Beta RMSE=0.01771  skill=-8.1%  DM=+2.589  p=0.0102  (significant, GARCH(1,1) x validation scale [Beta scaled] better)
+  seed 4: Beta RMSE=0.01949  skill=-19.0%  DM=+5.602  p=0.0000  (significant, GARCH(1,1) x validation scale [Beta scaled] better)
+
+skill score mean +/- std: -11.6% +/- 3.9%
+significant at alpha=0.05: Beta Agent better on 0, GARCH(1,1) x validation scale [Beta scaled] better on 5, of 5 seeds
