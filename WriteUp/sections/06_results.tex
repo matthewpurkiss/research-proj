@@ -1,0 +1,200 @@
+\section{Results}\label{sec:results}
+
+All results are the mean and standard deviation over five seeds unless stated otherwise. The 2025 trading test covers 201 weekdays, from 25 March to 31 December, because the Alpha Agent's 60-day window may not reach back into 2024. The 2026 forward test covers 194 weekdays.
+
+\subsection{Return forecasting (H1 and H2)}\label{sec:res-forecast}
+
+\begin{table}[!t]
+  \centering
+  \caption{Next-day BTC log-return forecasts on the 2025 test year (5 seeds). Predicting no change gives a MAPE of 1.785\%}
+  \label{tab:forecast}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}llcc@{}}
+    \toprule
+    Model & Inputs & RMSE ($\times10^{-2}$) & MAPE (\%) \\
+    \midrule
+    LSTM        & BTC only & $2.337 \pm 0.005$ & 1.776 \\
+    GRU         & BTC only & $2.348 \pm 0.019$ & 1.783 \\
+    Bi-LSTM     & BTC only & $3.355 \pm 0.983$ & n/a   \\
+    Bi-LSTM     & all 19   & $2.689 \pm 0.445$ & 2.104 \\
+    Alpha Agent & all 19   & $2.372 \pm 0.051$ & 1.816 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\Cref{tab:forecast} shows the return forecasts. The most important number in it is the one in the caption. Predicting that tomorrow's price equals today's gives a MAPE of 1.785\%, and every model lands within a few hundredths of a percentage point of that, apart from the multivariate Bi-LSTM, which is worse. The models have learned very little about tomorrow's return. This matches what the exploratory analysis found before any model was trained, since a persistence forecast of the return had an $R^2$ of $-1.055$, which is what a series close to a random walk looks like. It also means the MAPE values reported by Seabe et al. \cite{seabe2023} are hard to interpret without the matching naive baseline.
+
+For H1, the clean comparison is the same Bi-LSTM with and without the extra features. On average the multivariate version had a lower RMSE, 0.02689 against 0.03355. The Diebold-Mariano test was significant on four of the five seeds, but two of those favoured the multivariate model and two favoured the univariate one. The large standard deviations come from a few seeds that trained badly. H1 is supported on average, but not consistently, and I would not claim it as confirmed.
+
+For H2, the Alpha Agent had a lower RMSE than the plain multivariate Bi-LSTM, 0.02372 against 0.02689, and a much smaller spread across seeds. The difference was significant on two seeds, both in favour of attention. On those two seeds the plain Bi-LSTM had trained badly. One of them reached an RMSE of 0.0356, and its training curve showed no improvement at all, which suggests it was stuck in a poor local minimum. On the other three seeds attention gave a small edge that was not significant. So attention made the model more stable to train rather than more accurate, which is a weaker claim than H2 makes.
+
+\subsection{Direction}\label{sec:res-direction}
+
+\begin{table}[!t]
+  \centering
+  \caption{Next-day direction hit rate (\%). The pooled column covers 2024 to 2026 with a 95\% Wilson interval. None of the rules is trained or tuned}
+  \label{tab:direction}
+  \footnotesize
+  \setlength{\tabcolsep}{3.5pt}
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Method & 2024 & 2025 & 2026 & Pooled \\
+    \midrule
+    Alpha Agent    & 49.9 & 51.4 & 49.3 & 50.2 [46, 54] \\
+    Always up      & 49.3 & 50.2 & 47.4 & 49.0 [45, 53] \\
+    Momentum 1d    & 43.3 & 43.3 & 57.2 & 47.8 [44, 52] \\
+    Momentum 5d    & 46.3 & 48.8 & 46.9 & 47.3 [43, 51] \\
+    Momentum 20d   & 50.2 & 52.7 & 55.7 & 52.8 [49, 57] \\
+    Mean reversion & 56.7 & 56.7 & 42.8 & 52.2 [48, 56] \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+A trading system only needs the right sign, so I also measured how often each forecast called the direction correctly (\cref{tab:direction}). Pooled over about 600 days, the Alpha Agent was right 50.2\% of the time. Every interval in the pooled column contains 50\%, so neither the Alpha Agent nor any simple rule can be told apart from a coin flip. Rules that looked promising in one period fell apart in the next. Mean reversion was right 56.7\% of the time in both 2024 and 2025, then 42.8\% in 2026. That kind of reversal is what noise looks like.
+
+Several Alpha seeds barely made a directional call at all. On the 2025 test, seed 1 predicted a fall on every single day and seed 4 a rise on every day. A model trained with MSE on a target that is almost pure noise learns to predict values close to zero, and a tiny bias then fixes the sign. This matters for reading the trading results. Whatever the Risk Engine achieved, it did not get it from good direction calls.
+
+\subsection{Volatility and jump forecasting}\label{sec:res-vol}
+
+\begin{figure}[!t]
+  \centering
+  \includegraphics[width=\columnwidth]{phase3_volatility_target.png}
+  \caption{Skill against naive persistence for every volatility target tried. The five 14-day variants all lost heavily. The single-day target was the first to beat persistence.}
+  \label{fig:vol-target}
+\end{figure}
+
+\begin{table}[!t]
+  \centering
+  \caption{Volatility forecast error, RMSE against the size of the next day's move}
+  \label{tab:vol}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Method & 2025 test & 2026 forward \\
+    \midrule
+    Persistence (today's move) & 0.02079 & 0.02500 \\
+    GARCH(1,1)                 & 0.02246 & n/a \\
+    Beta Agent                 & $0.01974 \pm 0.00128$ & $0.02038 \pm 0.00101$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\Cref{fig:vol-target} sums up the volatility target problem from \cref{sec:vol-target}. Every 14-day variant lost to persistence by between 400\% and 770\%, while the single-day target gave a small positive skill.
+
+With the single-day target (\cref{tab:vol}), the Beta Agent's 2025 RMSE was 5.0\% lower than persistence. It was better on four of five seeds, but the difference was not significant on any one seed. Against GARCH(1,1) it was 12.1\% better, and significantly so on four of five seeds ($p<0.0001$), with the fifth a tie. On the 2026 data the gap to persistence widened to 18\%. GARCH was not rerun for 2026.
+
+These numbers look small because the target is noisy. The size of a single day's move is mostly luck, even when the true volatility is known, so no forecast can come close to it day by day. The fair question is whether the forecast tells calm days from wild ones. Here the Beta Agent is weaker than its RMSE suggests. On the 2025 backtest days its forecasts averaged 3.0\% while the actual moves averaged 1.78\%, so it was biased upwards, probably because the training years were more volatile than 2025. Its correlation with the actual move was only 0.19. When days were split into thirds by forecast, the actual average move went from 1.62\% on the calmest third to 1.83\% and then 1.90\% on the wildest. The ranking is right, but the separation is small.
+
+The jump branch was weaker still. Its test cross-entropy was 1.595, against 1.700 for always predicting the base rate, but it beat that baseline on only three of five seeds. With only about three jump days in the test year, this is hard to measure well. After Platt scaling the jump probabilities were still far too high. Grouped into four bands, the predicted probabilities ranged from 1.3\% to 56\% while the actual jump frequencies ranged from 0\% to 3.1\%. The ranking was again correct, since actual frequency rose from 0\% to 0.35\%, 1.73\% and 3.11\% across the bands. The Risk Engine only compares the jump probability with a threshold, so it uses the ranking and not the absolute values.
+
+\subsection{Trading performance (H3)}\label{sec:res-h3}
+
+\begin{table*}[!t]
+  \centering
+  \caption{Backtest results from R1{,}000 at a 2x leverage cap, mean of 5 runs. The bottom rows compare the Risk Engine with the fixed rules using a paired block bootstrap, giving the difference, its 95\% interval and a one-sided $p$-value}
+  \label{tab:trading}
+  \footnotesize
+  \begin{tabular}{@{}lcccccc@{}}
+    \toprule
+    & \multicolumn{3}{c}{2025 test} & \multicolumn{3}{c}{2026 forward (unseen)} \\
+    \cmidrule(lr){2-4}\cmidrule(lr){5-7}
+    & Risk Engine & Fixed rules & Buy and hold & Risk Engine & Fixed rules & Buy and hold \\
+    \midrule
+    Final balance  & R1{,}045 & R931 & R1{,}000 & R1{,}024 & R986 & R942 \\
+    Lowest balance & R968 & R884 & R872 & R943 & R835 & R660 \\
+    Max drawdown   & 4.6\% & 17.2\% & 31.8\% & 8.7\% & 22.8\% & 39.6\% \\
+    Sharpe         & 0.74 & $-0.50$ & 0.19 & 0.35 & $-0.18$ & 0.04 \\
+    Sortino        & 1.43 & $-0.77$ & 0.27 & 0.77 & $-0.10$ & 0.07 \\
+    Trades         & 63 & 201 & n/a & 98 & 194 & n/a \\
+    Liquidations   & 0 & 0 & n/a & 0 & 0 & n/a \\
+    \midrule
+    Drawdown cut (pp) & \multicolumn{3}{c}{$+12.6$ [7.0, 20.9], $p<0.001$} & \multicolumn{3}{c}{$+14.1$ [4.5, 19.2], $p<0.001$} \\
+    Sharpe gain       & \multicolumn{3}{c}{$+1.24$ [0.20, 2.45], $p=0.011$} & \multicolumn{3}{c}{$+0.53$ [$-0.44$, 1.65], $p=0.14$} \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\begin{figure*}[!t]
+  \centering
+  \subfloat[2025 test]{\includegraphics[width=0.48\textwidth]{explain_equity_2025.png}}\hfill
+  \subfloat[2026 forward]{\includegraphics[width=0.48\textwidth]{explain_equity_2026.png}}
+  \caption{Account value from R1{,}000. Lines are the average of the five runs and shading spans the best to the worst run.}
+  \label{fig:equity}
+\end{figure*}
+
+\Cref{tab:trading} and \cref{fig:equity} give the main result. In 2025 the Risk Engine's worst fall from a peak was 4.6\%, against 17.2\% for the fixed rules and 31.8\% for simply holding Bitcoin. The account ended at R1{,}045, against R931 for the fixed rules, while Bitcoin ended the period almost exactly where it started after a large rise and a sharp November fall. The Risk Engine had the lower drawdown on every one of the five seeds. The bootstrap puts the drawdown cut at 12.6 percentage points with a 95\% interval of 7.0 to 20.9, and the Sharpe gain at 1.24, which is also significant ($p=0.011$).
+
+The 2026 forward test is the stronger evidence, because that data did not exist while the system was being built. Bitcoin fell 5.8\% over the nine months and at its lowest a buy-and-hold account was down to R660. The Risk Engine's drawdown was 8.7\% against 22.8\% for the fixed rules, again lower on all five seeds, and the cut of 14.1 percentage points was again significant. The Sharpe gain of 0.53 was not significant this time, which fits H3's wording that Sharpe should stay comparable rather than improve. Lower risk did have a cost on one seed, where the fixed rules ended at R1{,}260 against R1{,}049 for the Risk Engine.
+
+The Risk Engine did not earn more per day. The daily-return Diebold-Mariano test put it ahead on every seed in 2025, by between 0.001\% and 0.081\% a day, but the difference was not significant on any of them. Its advantage came from avoiding large losses. It also traded far less, on 63 of the 201 days in 2025 against every day for the fixed rules, and its account value is flat for long stretches in \cref{fig:equity}.
+
+Validation did not point the same way. On 2024 the fixed rules scored better on the tuning objective, 0.886 against 0.213. Even so, the Risk Engine's settings were kept, as the plan required, and they did better on both later periods. This is a reminder of how noisy one year of daily trading is, and it is the reason for the bootstrap tests.
+
+\subsection{Further tests of the Risk Engine}\label{sec:res-robust}
+
+\begin{table}[!t]
+  \centering
+  \caption{Rule ablation on the 2025 test. Each rule is replaced by its fixed version and the system is retuned on 2024}
+  \label{tab:ablation}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Version & Max DD & Extra DD (pp) & Sharpe \\
+    \midrule
+    All five rules            & 4.6\%  & n/a     & 0.74 \\
+    Fixed stop-loss           & 8.2\%  & $+3.6$  & $-0.14$ \\
+    No weak-prediction filter & 7.9\%  & $+3.3$  & 0.39 \\
+    Fixed position size       & 6.8\%  & $+2.2$  & 0.71 \\
+    No jump veto              & 5.6\%  & $+1.0$  & 0.47 \\
+    Fixed leverage            & 4.9\%  & $+0.3$  & 0.74 \\
+    All fixed                 & 17.2\% & $+12.6$ & $-0.50$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[!t]
+  \centering
+  \caption{Leverage stress test on 2025. Both engines are retuned at each cap. RE is the Risk Engine, DD is maximum drawdown and Liq. is liquidations}
+  \label{tab:stress}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}ccccc@{}}
+    \toprule
+    Cap & DD (RE) & DD (fixed) & Balance (RE) & Liq. (RE/fixed) \\
+    \midrule
+    2x  & 4.6\%  & 17.2\% & R1{,}045 & 0 / 0 \\
+    5x  & 12.6\% & 38.3\% & R1{,}106 & 0 / 0 \\
+    10x & 24.2\% & 42.2\% & R1{,}214 & 0 / 0 \\
+    20x & 38.2\% & 68.8\% & R1{,}500 & 2 / 0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The rule ablation (\cref{tab:ablation}) shows that no single rule carries the result. Replacing the volatility stop with a fixed one cost the most, 3.6 percentage points of extra drawdown ($p=0.0008$), and it was the only change that also cut the Sharpe ratio significantly. The weak-prediction filter added 3.3 points and volatility sizing 2.2. The jump veto added 1.0 point and jump-scaled leverage only 0.3, which fits the weak jump forecasts. Switching every rule off cost 12.6 points, more than the 10.4 points the separate rules add up to, so the rules partly cover for each other. Retuning means each version also changed some other settings, so each row is that version at its best rather than a single switch flipped.
+
+The stress test (\cref{tab:stress}) pushed the leverage cap up to 20x. The Risk Engine's drawdown was lower than the fixed rules' at every cap, and the bootstrap cut was significant every time ($p<0.0002$). The Sharpe gain was significant at 2x and 5x and borderline at 10x and 20x. The liquidation results went against H3. Below 20x neither engine was ever liquidated. At 2x a trade needs a 50\% move to be liquidated, and any stop closer than that fires first. Bitcoin also opened more than 2\% away from the previous close on only 3 of 2{,}922 days, so gaps rarely jump past a stop. At 20x the liquidation level is only 5\% away, and the Risk Engine was liquidated twice while the fixed rules never were. On volatile days the volatility stop had moved out beyond the liquidation level, so the position was closed out before the stop could fire.
+
+Swapping the direction model made little difference. With the plain Bi-LSTM in place of the Alpha Agent, the 2025 drawdown was 3.4\% and the Sharpe 0.36. With the univariate LSTM they were 9.2\% and $-0.44$. Neither difference from the Alpha Agent version was significant ($p\ge0.10$). The attention layer added nothing measurable once its forecasts went through the Risk Engine.
+
+Finally, I ran the Risk Engine on 2026 at each leverage cap, tuning each cap on 2024 as before and reporting every cap rather than the best one. The average return was 2.4\% at 2x, 5.6\% at 5x, 9.1\% at 10x and $-12.1\%$ at 20x, with average drawdowns of 8.7\%, 14.8\%, 27.7\% and 55.2\%. The Sharpe ratio stayed between 0.35 and 0.41 up to 10x and fell to $-0.03$ at 20x. More leverage gave a wider spread of outcomes, not more return per unit of risk.
+
+\subsection{Summary of hypotheses}
+
+\begin{table}[!t]
+  \centering
+  \caption{Outcome for each hypothesis}
+  \label{tab:scorecard}
+  \footnotesize
+  \begin{tabularx}{\columnwidth}{@{}lX@{}}
+    \toprule
+    H1 & Partly supported. Lower RMSE on average, not consistent across seeds. \\
+    H2 & Partly supported. Attention helped only when the plain Bi-LSTM trained badly, with no measurable effect on trading. \\
+    H3 & Supported for drawdown in 2025, in 2026 and at every leverage cap. Sharpe not worse, with a significant gain in 2025 but not in 2026. Not supported for liquidations. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\Cref{tab:scorecard} gives the outcome for each hypothesis.

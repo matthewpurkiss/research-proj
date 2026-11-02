@@ -1,31 +1,32 @@
 # Final write-up
 
-The LaTeX template for the final research report. It uses the same wording as the proposal, but the format is a compact article, because the target is **8–12 pages of content**: Introduction through Conclusion, excluding the title page, abstract, declaration, contents, references and appendix.
+The final research report in **IEEE conference format** (`IEEEtran`, two columns, numbered references). It's written as a full draft, ready for proofreading. `Final_Report_Draft.pdf` is the compiled copy.
 
-## Files and page budget
+**Length:** about 10 pages from the title to the end of the Conclusion, against a target of 8–12. References, the appendix and the declarations don't count.
 
-| File | Section | Pages |
-|---|---|---|
-| `sections/00_frontmatter.tex` | Abstract, declaration, acknowledgements, contents | not counted |
-| `sections/01_introduction.tex` | Motivation, research question, H1–H3, contributions | ~1 |
-| `sections/02_background.tex` | Condensed from the proposal: one paragraph per topic | ~1.5–2 |
-| `sections/03_data_method.tex` | Data, splits, framework, Risk Engine, backtest, statistics | ~3 |
-| `sections/04_results.tex` | **Tables and figures already filled in with the real numbers.** You write the text. | ~3–4 |
-| `sections/05_discussion.tex` | Why, deviations from the proposal, limitations | ~1.5 |
-| `sections/06_conclusion.tex` | Answer, takeaway, future work | ~0.5 |
-| `sections/appendix.tex` | Feature list, hyperparameters, extra figure, reproducibility | not counted |
-| `references.bib` | Paste the proposal's `.bib` entries here | not counted |
+## Files
 
-The fixed content (5 tables and 3 figures) already takes about 3.5 pages, which leaves roughly 6–8 pages of your own writing. Detail that doesn't fit belongs in the appendix.
+| File | Section |
+|---|---|
+| `sections/00_abstract.tex` | Abstract and index terms |
+| `sections/01_introduction.tex` | I. Introduction, hypotheses, contributions |
+| `sections/02_related_work.tex` | II. Related Work |
+| `sections/03_data.tex` | III. Data |
+| `sections/04_method.tex` | IV. Methodology |
+| `sections/05_setup.tex` | V. Experimental Setup, including Use of AI tools |
+| `sections/06_results.tex` | VI. Results |
+| `sections/07_discussion.tex` | VII. Discussion |
+| `sections/08_conclusion.tex` | VIII. Conclusion |
+| `sections/appendix.tex` | Features, models and settings, reproducibility |
+| `sections/99_declaration.tex` | Wits declaration and AI declaration |
+| `references.bib` | References |
 
-## Markers
+## Before submitting
 
-- Green **WRITE** boxes say what each section needs.
-- Red **[TBC: …]** marks a gap still to fill.
-- Before submitting:
-  - set `\guidefalse` in `main.tex` so the boxes disappear;
-  - check the page count with the boxes off;
-  - search the PDF for "TBC" to make sure none are left.
+- Fill in the red **[TBC]** items in the declaration: the dates, the signature, and Quillbot if you used it.
+- Check the ticks on the AI declaration.
+- Check the references added for the final report (second group in `references.bib`) against the originals.
+- After your own rewrite, recompile and check the page count.
 
 ## Compiling
 
@@ -33,11 +34,3 @@ You can compile it any of these ways:
 - **Overleaf:** upload `WriteUp/` and the `figures/` folder, keeping `figures/` next to `main.tex`.
 - **Tectonic:** run `tectonic main.tex` in this folder.
 - **latexmk:** run `latexmk -pdf main.tex` in this folder.
-
-## Suggested writing order (due 2 Nov)
-
-1. **Data and Methodology** (23–24 Oct)
-2. **Results** (25–26 Oct)
-3. **Discussion and Conclusion** (27–28 Oct)
-4. **Introduction and Background** (29–30 Oct)
-5. **Abstract, proofread, send to Clint** (31 Oct). Then use 1–2 Nov for his comments.

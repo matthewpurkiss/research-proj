@@ -1,0 +1,31 @@
+\section{Experimental Setup}\label{sec:setup}
+
+\subsection{Backtest}\label{sec:backtest}
+
+The backtest simulates a leveraged BTC CFD account that starts with R1{,}000. Returns are computed in dollars and the rand figure is for display only, so every result scales with the account size and ignores USD/ZAR moves. At the close of each weekday $t$ the Risk Engine decides on a trade, which is entered at that close and exited at the close of the next weekday. Bitcoin keeps trading over the weekend while the models do not, so a Friday trade stays open until Monday. Stops and liquidation are therefore checked against every calendar day's open, high and low in between, weekends included. If the price gaps through a stop, the trade is filled at the open. A trade is liquidated when its loss reaches the posted margin, at which point the margin is lost but no more, as with the negative balance protection that retail CFD brokers must offer in the EU. Each round trip costs 0.1\% of the position's value. Stops are filled at the stop price with no slippage, which flatters the results slightly. I checked the simulator by hand against seven worked examples, including a stop, a gap through a stop, a liquidation, a short trade and a trade held over a weekend.
+
+Both engines were tuned by grid search on 2024, using one setting shared by all five seeds and maximising the mean of Sharpe ratio minus maximum drawdown. The Risk Engine's grid had 324 combinations, covering $\tau_j \in \{0.1, 0.25, 0.5, 1\}$, $\tau_y \in \{0, \tfrac13, \tfrac23\}$, $k \in \{0.005, 0.01, 0.02\}$, $c \in \{1, 2, 3\}$ and $L_{\max} \in \{2, 5, 10\}$. The fixed rules had 81, covering the same $\tau_y$, a position fraction in $\{0.25, 0.5, 1\}$, a stop in $\{2, 4, 6\}\%$ and leverage in $\{2, 5, 10\}$. Both searches chose 2x leverage, which happens to be the EU retail limit for crypto CFDs. The chosen settings (\cref{tab:chosen}) were then frozen and run once on 2025 and once on 2026. Each Alpha seed is paired with the Beta seed of the same number, giving five runs per engine.
+
+Three further experiments test the Risk Engine. In the rule ablation, each of the five rules is replaced in turn by its fixed version and the system is retuned on 2024. In the leverage stress test, both engines are retuned with the leverage cap fixed at 2x, 5x, 10x and 20x. In the forecaster swap, the Alpha Agent is replaced by the plain Bi-LSTM or the univariate LSTM while everything else stays the same. Finally, to check whether next-day direction is predictable at all, I compared the Alpha Agent's hit rate with simple rules that need no training. These were always predicting up, momentum over 1, 5 and 20 days, and mean reversion, which bets against yesterday's move.
+
+\subsection{Metrics}\label{sec:metrics}
+
+Return forecasts are scored with RMSE and, for comparison with Seabe et al. \cite{seabe2023}, with MAPE on the price implied by the forecast, $\hat P_{t+1}=P_t e^{\hat r_{t+1}}$. Direction is scored with the hit rate, the share of days on which the forecast had the right sign, with a Wilson 95\% interval \cite{wilson1927}. Volatility forecasts are scored with RMSE against $|r_{t+1}|$, both on their own and as a skill score against persistence,
+\begin{equation}
+  \text{skill} = 1 - \frac{\text{RMSE}_{\text{model}}}{\text{RMSE}_{\text{persistence}}}.
+\end{equation}
+
+For trading, with $V_t$ the account value on day $t$ and $\bar r$ and $s_r$ the mean and standard deviation of daily returns, the main measures are
+\begin{align}
+  \text{MDD} &= \max_t \left(1 - \frac{V_t}{\max_{s \le t} V_s}\right), \\
+  \text{Sharpe} &= \sqrt{260}\,\frac{\bar r}{s_r},
+\end{align}
+with a risk-free rate of zero and 260 trading days a year. The Sortino ratio uses the downside deviation in place of $s_r$. The liquidation rate is the share of the five runs with at least one liquidation.
+
+\subsection{Significance tests}\label{sec:tests}
+
+Forecast errors were compared with the Diebold-Mariano test \cite{diebold1995}, run separately for each seed, at a 5\% level. For the trading results, the daily-return gap between the engines was first tested in the same way, with a Newey-West variance \cite{newey1987} with four lags. Drawdown and Sharpe are statistics of a whole path rather than an average of daily values, so they were compared with a paired moving-block bootstrap \cite{kunsch1989}. Each of 5{,}000 resamples is built from random 10-day blocks of test days. Blocks keep the day-to-day dependence in returns that a plain bootstrap would destroy. The same blocks are used for both engines and all five seeds, so the comparison is paired. The result is a 95\% interval for the difference and a one-sided $p$-value, the share of resamples in which the Risk Engine showed no advantage.
+
+\subsection{Use of AI tools}
+
+As the Wits declaration asks, I record here how generative AI was used. The pipeline code, the backtester and the analysis scripts were written with the help of Claude, an AI assistant made by Anthropic, and I reviewed and tested each part. Some methodological options, such as the block bootstrap and the percentile strength filter, came out of discussions with the assistant, and I made the final choice in each case. The assistant also produced the figures and drafted this report, which I then checked and rewrote. I ran every official training run and experiment myself, and the reported numbers come from those runs and the result files they wrote. The one exception is the short diagnostic of the volatility forecast's bias in \cref{sec:res-vol}, which the assistant computed from the same saved models. The full declaration is at the end of the report.

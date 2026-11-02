@@ -1,21 +1,23 @@
 \section{Introduction}\label{sec:intro}
 
-\begin{guide}
-\textbf{About 1 page, 4 short paragraphs.} Adapt from the proposal, in the past tense.
-\begin{enumerate}
-  \item \textbf{Motivation:} crypto CFDs give retail traders leverage on a market that moves 5--10\% in a day, so one bad day can wipe an account. Most deep-learning trading studies report forecast accuracy and stop there, but accuracy does not prevent liquidation.
-  \item \textbf{Approach and research question:} separate ``which way'' from ``how risky'', and let the risk forecast drive size, stop and leverage. Ask: does this cut drawdown and liquidations compared with fixed rules, without lowering risk-adjusted returns?
-  \item \textbf{Hypotheses:} H1--H3 word for word from the proposal, as the list below.
-  \item \textbf{Contributions and outline}, in two or three sentences: the framework and CFD backtest; the volatility-target finding; a drawdown result that held on unseen 2026 data; the honest negative result on direction.
-\end{enumerate}
-\end{guide}
+Bitcoin regularly moves 5\% in a day, and moves of 10\% are not rare. For someone who simply owns Bitcoin this is uncomfortable. For someone trading it through a contract for difference (CFD) it can end the account. A CFD lets a trader take a position on the price without owning the asset, and the broker lends most of the position's value. At 10x leverage a 10\% move against the trader wipes out the whole margin and the broker closes the trade. This is called liquidation, and once it happens there is nothing left to recover with.
 
-\tbc{motivation}
+Most of the deep learning literature on cryptocurrency treats the problem as price forecasting. Models such as the LSTM, GRU and Bi-LSTM are trained to predict the next price and then ranked by MAPE or RMSE \cite{seabe2023,hansun2022}. That is a reasonable research question, but it is not the question a leveraged trader faces. A model can be right on average and still produce one large error during a volatile week, and under leverage that one error decides whether the account survives. I argued in my proposal that forecast accuracy is the wrong target once leverage is involved, and that what matters is how forecasts are turned into exposure.
+
+The framework in this paper separates the two jobs. The Alpha Agent, an attention-based multivariate Bi-LSTM, forecasts which way Bitcoin will move tomorrow. The Beta Agent, a pair of small GRUs, forecasts how big tomorrow's move will be and how likely a jump is. The Dynamic Risk Engine is a set of fixed rules that uses both forecasts to decide whether to trade, how much to trade, where to put the stop-loss and how much leverage to use. Keeping risk out of the direction model means each part can be built, tested and removed on its own, and it means the risk side can still do its job if the direction side turns out to be weak. As it happened, that was exactly the situation.
+
+The research question was how an attention-based multivariate Bi-LSTM, combined with a volatility-aware risk mechanism, affects predictive stability and capital preservation for a CFD trading agent on Bitcoin. The proposal set out three hypotheses, restated here with one correction: the proposal said the models forecast the closing price, but they forecast the next day's log-return, as Section~5.2 of the proposal already described.
 
 \begin{description}
-  \item[H1] \tbc{exact wording from proposal - multivariate inputs beat univariate}
-  \item[H2] \tbc{attention beats the same Bi-LSTM without it}
-  \item[H3] \tbc{volatility-aware rules cut drawdown and liquidations versus fixed rules, without worse risk-adjusted returns}
+  \item[H1] A Bi-LSTM trained on the multivariate feature vector achieves lower forecast error (MAPE and RMSE) than the same architecture trained on Bitcoin's own returns alone.
+  \item[H2] Adding self-attention to the multivariate Bi-LSTM gives lower forecast error than the standard Bi-LSTM without attention.
+  \item[H3] Volatility-conditioned risk management lowers maximum drawdown and liquidation rate compared with an ablated framework that uses fixed position sizes and fixed stop-losses on the same forecasts, while keeping Sharpe and Sortino ratios comparable.
 \end{description}
 
-\tbc{contributions and outline}
+H3 is the main hypothesis, since it is the volatility-aware risk management in the title.
+
+The results are mixed, and I report them that way. Neither the Alpha Agent nor any simple rule could predict Bitcoin's next-day direction better than chance. H1 and H2 were only partly supported. H3 was supported for drawdown, in the 2025 test year, in an untouched 2026 forward test and at every leverage level tried, but not for liquidations. Along the way I found that the volatility target in the proposal could not be beaten by any model, for a structural reason, and had to be replaced.
+
+The paper makes four contributions. It builds and evaluates the decoupled framework in a CFD backtest that checks stops and liquidation on weekend price moves and charges trading costs. It shows that a 14-day rolling volatility target is a trap when today's value is also an input, and that a single-day target fixes it. It gives statistically tested evidence that volatility-aware rules cut drawdown on data that the system had never seen. And it reports a clear negative result on direction, which is useful in a field where positive results are much more likely to be published.
+
+Section~\ref{sec:related} reviews related work. Sections~\ref{sec:data} to \ref{sec:setup} describe the data, the models and the experiments. Section~\ref{sec:results} gives the results, Section~\ref{sec:discussion} discusses them and Section~\ref{sec:conclusion} concludes.

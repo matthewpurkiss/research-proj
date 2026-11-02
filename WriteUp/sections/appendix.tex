@@ -1,31 +1,56 @@
 \section{Features}\label{app:features}
-\tbc{table of the 19 features in $X_t$ - from the proposal / Phase 1}
 
-\section{Models, training and settings}\label{app:hyper}
-
-\tbc{architecture table (from HANDOFF.md): Vanilla LSTM 1$\times$64; GRU 1$\times$74; Bi-LSTM 2 layers $\times$ 64 per direction, dropout 0.2; Alpha Agent = Bi-LSTM + attention, 60-day window; Beta Agent 2 $\times$ GRU(32), 30-day window. Training: Adam lr $10^{-3}$, batch 64, early stopping after 10 stagnant epochs, LR halved after 5, gradient clipping 1.0, seeds 0--4. Also the tuning grid searched.}
-
-\begin{table}[ht]
+\begin{table}[!h]
   \centering
-  \caption{Risk Engine settings chosen on 2024 validation (\texttt{Code/results/chosen\_params.json}).}
-  \label{tab:chosen}
-  \small
-  \begin{tabular}{ll}
+  \caption{The 19 input features}
+  \label{tab:features}
+  \footnotesize
+  \begin{tabularx}{\columnwidth}{@{}lX@{}}
     \toprule
-    Dynamic Risk Engine & $\tau_j = 0.25$, $\tau_y = 0.33$, $k = 0.005$, $c = 1.0$, $L_{\max} = 2$ \\
-    Fixed rules & $\tau_y = 0$, position fraction 0.25, stop 2\%, leverage 2 \\
+    Group & Features \\
+    \midrule
+    Log-returns (6) & BTC, ETH, S\&P 500, gold, US dollar index, VIX \\
+    Volatility (1) & BTC 14-day realised volatility \\
+    Correlations (3) & 30-day rolling correlation of BTC returns with ETH, S\&P 500 and gold \\
+    On-chain (6) & 7-day rate of change of active addresses, hash rate, transaction count, mempool size, miner revenue, mining difficulty \\
+    Volume (3) & log volume of BTC, ETH and S\&P 500 \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
-\section{Additional figures}
-\begin{figure}[ht]
+\section{Models and settings}\label{app:hyper}
+
+\begin{table}[!h]
   \centering
-  \includegraphics[width=0.85\textwidth]{phase5_direction_baselines.png}
-  \caption{Next-day direction hit rate with 95\% intervals for the Alpha Agent and untrained rules; dashed line = 50\%.}
-  \label{fig:direction}
-\end{figure}
-\tbc{optional extra figures (leverage stress, rule ablation, leverage menu) - only include what the main text refers to}
+  \caption{Model architectures}
+  \label{tab:arch}
+  \footnotesize
+  \begin{tabularx}{\columnwidth}{@{}lX@{}}
+    \toprule
+    Model & Architecture \\
+    \midrule
+    LSTM & 1 layer, 64 units, BTC returns only \\
+    GRU & 1 layer, 74 units (parameter-matched), BTC returns only \\
+    Bi-LSTM & 2 bidirectional layers, 64 units per direction, dropout 0.2, 60-day window \\
+    Alpha Agent & Bi-LSTM as above plus single-head attention, 60-day window \\
+    Beta Agent & two separate GRUs of 32 units (volatility and jump), 30-day window, Platt-scaled jump output \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\begin{table}[!h]
+  \centering
+  \caption{Risk settings chosen on 2024 validation}
+  \label{tab:chosen}
+  \footnotesize
+  \begin{tabularx}{\columnwidth}{@{}lX@{}}
+    \toprule
+    Risk Engine & $\tau_j = 0.25$, $\tau_y = 1/3$, $k = 0.005$, $c = 1$, $L_{\max} = 2$ \\
+    Fixed rules & $\tau_y = 0$, position fraction 0.25, stop 2\%, leverage 2 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 \section{Reproducibility}
-\tbc{repository layout, the order to run the scripts (from HANDOFF.md), package versions, data-freeze tag and checksum verification}
+
+The code and data are in a private GitHub repository, available on request. The data used for every result is frozen with SHA-256 checksums under the git tag \texttt{data-freeze-2026-10-07}, and the 2026 forward data is recorded separately in the same freeze file. The pipeline runs in order: data fetch and dataset build, leakage audit and mutation test, Alpha and baseline training, Beta Agent training and Platt scaling, the GARCH and skill-score comparisons, the backtest with its grid search, and finally the Phase 5 scripts for the significance tests, ablations, stress test, forward test and direction baselines. The experiments used Python 3.9.6, PyTorch 2.8.0, pandas 2.3.3, NumPy 1.23.5, yfinance 1.2.0 and arch 7.2.0 for GARCH.

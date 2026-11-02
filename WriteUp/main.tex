@@ -1,45 +1,38 @@
 % =====================================================================
 %  Final research report - Matthew Purkiss (2697424)
-%  Target: 8-12 pages of content (Introduction to Conclusion), excluding
-%  title page, abstract, declaration, contents, references and appendix.
+%  IEEE conference format (IEEEtran), two columns.
+%  Target: 8-12 pages from the title to the end of the Conclusion,
+%  NOT counting references, appendix or declaration.
 %
 %  Compile from this folder:  tectonic main.tex   or   latexmk -pdf main.tex   (or Overleaf)
 %
-%  Green "WRITE" boxes are guidance for you, with a page budget per section.
-%  They disappear when you change \guidetrue to \guidefalse below - do that
-%  before submitting, and check the page count with them switched off.
+%  Draft written in full. Red [TBC: ...] marks the few things only you can fill
+%  in (dates, signature, Quillbot). The guide environment is kept in case you
+%  want to leave yourself notes; \guidefalse hides them.
 % =====================================================================
-\documentclass[11pt,a4paper]{article}
+\documentclass[conference]{IEEEtran}
 
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
-\usepackage{lmodern}
-\usepackage[margin=2.5cm]{geometry}
-\usepackage{setspace}
+\usepackage{cite}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{xcolor}
 \usepackage[most]{tcolorbox}
-\usepackage[font=small,labelfont=bf]{caption}
-\usepackage{subcaption}
+\usepackage[caption=false,font=footnotesize]{subfig}
 \usepackage[hidelinks]{hyperref}
 \usepackage[nameinlink,capitalise]{cleveref}
-\usepackage[authoryear,round]{natbib}
 \usepackage{environ}
 
 \graphicspath{{../figures/}{figures/}} % works here and on Overleaf (upload the figures folder next to main.tex)
-\setstretch{1.15}
-\setlength{\parskip}{0.4em}
-\setlength{\parindent}{0pt}
 
 % ---------------- guidance boxes (switch off before submitting) ------
 \newif\ifguide
 \guidetrue      % <- change to \guidefalse for the final PDF
 \ifguide
   \newtcolorbox{guide}{colback=green!5,colframe=green!45!black,
-    fonttitle=\bfseries\small,title=WRITE,fontupper=\small,breakable}
+    fonttitle=\bfseries\scriptsize,title=WRITE,fontupper=\scriptsize,breakable,
+    left=3pt,right=3pt,top=2pt,bottom=2pt}
 \else
   \NewEnviron{guide}{}
 \fi
@@ -47,45 +40,38 @@
 \newcommand{\tbc}[1]{\textcolor{red}{[TBC: #1]}}
 
 \begin{document}
-\pagenumbering{alph}
 
-% ======================= TITLE PAGE ==================================
-\begin{titlepage}
-  \centering
-  \vspace*{1.5cm}
-  {\LARGE\bfseries A DECOUPLED ATTENTION-BASED BI-LSTM FRAMEWORK WITH VOLATILITY-AWARE RISK MANAGEMENT FOR AI-DRIVEN CFD CRYPTOCURRENCY TRADING\par}
-  \vspace{2cm}
-  {\large School of Computer Science \& Applied Mathematics\\University of the Witwatersrand\par}
-  \vspace{1.5cm}
-  {\Large Matthew Purkiss\\2697424\par}
-  \vspace{1cm}
-  {\large Supervised by Clint Van Alten\par}
-  \vfill
-  {\large \tbc{submission date}\par}
-  \vspace{1cm}
-  {\normalsize A research report submitted to the Faculty of Science, University of the Witwatersrand, Johannesburg, in partial fulfilment of the requirements for the degree of Bachelor of Science with Honours\par}
-\end{titlepage}
+\title{A Decoupled Attention-Based Bi-LSTM Framework with Volatility-Aware Risk Management for AI-Driven CFD Cryptocurrency Trading}
 
-\pagenumbering{roman}
-\input{sections/00_frontmatter}
+\author{\IEEEauthorblockN{Matthew Purkiss (2697424)}
+\IEEEauthorblockA{School of Computer Science \& Applied Mathematics\\
+University of the Witwatersrand, Johannesburg, South Africa\\
+Supervisor: Clint Van Alten}}
 
-\clearpage
-\pagenumbering{arabic}
-% ---------------- 8-12 pages of content start here -------------------
+\maketitle
+
+\input{sections/00_abstract}
+
+% ---------------- 8-12 pages of content -------------------------------
 \input{sections/01_introduction}   % ~1 page
-\input{sections/02_background}     % ~1.5-2 pages
-\input{sections/03_data_method}    % ~3 pages
-\input{sections/04_results}        % ~3-4 pages
-\input{sections/05_discussion}     % ~1.5 pages
-\input{sections/06_conclusion}     % ~0.5 page
+\input{sections/02_related_work}   % ~1.5 pages
+\input{sections/03_data}           % ~1 page
+\input{sections/04_method}         % ~2 pages
+\input{sections/05_setup}          % ~1 page
+\input{sections/06_results}        % ~3 pages
+\input{sections/07_discussion}     % ~1.5 pages
+\input{sections/08_conclusion}     % ~0.5 page
 % ---------------- content ends here ----------------------------------
 
-\clearpage
-\nocite{placeholder} % delete this line once you cite real references
-\bibliographystyle{plainnat}
+\section*{Acknowledgment}
+I would like to thank my supervisor, Clint Van Alten, for his guidance throughout the project, and in particular for the question that led to the single-day volatility target.
+
+\bibliographystyle{IEEEtran}
 \bibliography{references}
 
-\appendix
+\appendices
 \input{sections/appendix}
+
+\input{sections/99_declaration}
 
 \end{document}

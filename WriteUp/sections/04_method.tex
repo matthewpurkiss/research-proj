@@ -1,0 +1,60 @@
+\section{Methodology}\label{sec:method}
+
+\begin{figure*}[!t]
+  \centering
+  \includegraphics[width=0.9\textwidth]{framework_diagram.png}
+  \caption{The decoupled framework. Direction and risk are forecast by separate models and combined by fixed rules.}
+  \label{fig:framework}
+\end{figure*}
+
+\Cref{fig:framework} shows the framework. At the close of each trading day $t$ the Alpha Agent forecasts tomorrow's return $\hat r_{t+1}$. The Beta Agent forecasts the size of tomorrow's move $\hat\sigma_{t+1}$ and a jump probability $\hat p_{t+1}$. The Dynamic Risk Engine combines the three numbers into a trade. The point of splitting the work is that a single network asked to forecast direction and risk at once has to trade one loss off against the other \cite{ruder2017}. Separate models can each be trained on one objective, and each part can be switched off to see what it contributes.
+
+\subsection{Alpha Agent}
+
+The Alpha Agent reads a window of the last $T=60$ trading days, about three months, with all 19 features at each step. Two stacked bidirectional LSTM layers with 64 units per direction and dropout of 0.2 turn the window into a sequence of 128-dimensional vectors $h_1,\dots,h_T$. A single-head scaled dot-product attention layer \cite{vaswani2017} then uses the last step as the query and the whole window as keys and values:
+\begin{align}
+  q &= W_q h_T, \quad k_i = W_k h_i, \quad v_i = W_v h_i, \\
+  \alpha_i &= \frac{\exp\!\left(q^\top k_i/\sqrt{d}\right)}{\sum_{j=1}^{T}\exp\!\left(q^\top k_j/\sqrt{d}\right)}, \\
+  c &= \sum_{i=1}^{T} \alpha_i v_i ,
+\end{align}
+where $d$ is the key dimension. A linear layer maps the context vector $c$ to the forecast $\hat r_{t+1}$, and the model is trained with mean squared error on the realised return. The weights $\alpha_i$ let the model look straight back at a particular day in the window, for example a crash six weeks earlier, without that information having to survive 40 recurrent steps.
+
+\subsection{Beta Agent}
+
+The Beta Agent reads a shorter window of $T=30$ days of the same 19 features, since volatility regimes change faster than trends. It is made of two independent single-layer GRUs with 32 hidden units each. The first predicts the size of tomorrow's move through a softplus output, so the forecast is always positive, and is trained with mean squared error against $|r_{t+1}|$. The second outputs a jump logit and is trained with binary cross-entropy. Because only about one day in 40 is a jump, the loss weights each jump by the ratio of non-jump to jump days in the training set, which comes to roughly 36. Each branch is checkpointed on its own validation loss.
+
+The proposal described a single GRU with two output heads. I started with that design, and it failed on the new volatility target. As the jump head trained, the volatility head got worse, with validation RMSE on one seed rising from 0.0234 to 0.0264. With the jump loss switched off, the same network reached 0.0182. Splitting the model into two networks removed this interference.
+
+The weighted loss pushes the raw jump probabilities far too high, since missing a jump costs 36 times more than a false alarm. I therefore recalibrated them with Platt scaling \cite{platt1999}, fitting $\hat p = \operatorname{sigmoid}(A z + B)$ to each seed's validation logits $z$ and applying it unchanged to the test and forward periods.
+
+\subsection{Choice of volatility target}\label{sec:vol-target}
+
+The proposal's volatility target was the 14-day realised volatility one day ahead. This turned out to be a trap. Tomorrow's 14-day window shares 13 of its 14 days with today's, and today's 14-day volatility was already one of the inputs. So the naive forecast that just repeats today's value, called persistence, is almost exactly right by construction. In the data its $R^2$ was 0.917.
+
+The first Beta Agent had an RMSE of 0.0198 on this target, against 0.0023 for persistence. That is a skill score of $-766\%$, meaning its errors were almost nine times larger than those of simply copying the input. I then tried four fixes, testing five variants in total (\cref{fig:vol-target}). These were predicting the day-to-day change instead of the level, a control run of the same idea on a shorter training range, adding a leakage-safe GARCH forecast as an extra input, and the change target combined with the GARCH input. Every variant still lost to persistence on every seed.
+
+When I sent this to my supervisor, he asked whether the model was predicting the 14-day average or just the next day's own volatility, and suggested the second. Using $|r_{t+1}|$ as the target removes the overlap, because tomorrow's move is not known on any part of today's window. This was the first version of the Beta Agent to beat persistence, and it became the official target. The leakage audit was extended to check it, and the mutation test was given a sixth planted leak to prove that check works.
+
+\subsection{Dynamic Risk Engine}\label{sec:risk-engine}
+
+The Risk Engine is plain code, not a learned model, so its behaviour can be read, checked and explained without retraining anything. It applies five rules each day.
+
+\begin{enumerate}
+  \item \emph{Jump veto.} If $\hat p_{t+1} > \tau_j$, stay out.
+  \item \emph{Direction with a strength filter.} Go long if $\hat r_{t+1}>0$ and short if it is negative, but only if $|\hat r_{t+1}|$ is larger than a share $\tau_y$ of the same model's previous 60 forecasts. Otherwise stay out.
+  \item \emph{Volatility sizing.} Use a fraction $f_t=\min(1,\,k/\hat\sigma_{t+1})$ of the account as margin.
+  \item \emph{Volatility stop.} Place the stop at a distance $c\,\hat\sigma_{t+1}$ from the entry.
+  \item \emph{Jump-scaled leverage.} Use leverage $L_t = L_{\max}(1-\hat p_{t+1})$.
+\end{enumerate}
+
+Rule 2 changed from the proposal. The proposal used a fixed minimum forecast size. In practice the five Alpha seeds forecast on scales up to five times apart, and their scale drifted between 2024 and 2025, so one shared threshold made seed 3 never trade on the test year while seeds 1 and 4 traded every day. Measuring strength as a percentile of the model's own recent forecasts fixes this, and it only uses past forecasts.
+
+To test H3, the Risk Engine is compared with a fixed-rule version of itself. It uses the same Alpha forecasts and the same direction rule, but trades a fixed fraction of the account with a fixed stop and constant leverage, and has no jump veto. In effect it is the same system with the Beta Agent removed.
+
+\subsection{Baselines and training}
+
+Three baselines from the proposal were trained next to the Alpha Agent. These are a one-layer LSTM with 64 units on BTC returns alone, a GRU with 74 units on BTC returns alone (sized to match the LSTM's parameter count), and the same two-layer Bi-LSTM as the Alpha Agent without the attention layer. The vanilla LSTM differs from the Alpha Agent in both inputs and architecture, so it cannot test H1 cleanly. For a clean H1 test I added the Bi-LSTM trained on BTC returns alone, so the only difference is the input. One detail matters here. The plain Bi-LSTM pools its output with each direction's final hidden state. Taking the output at the last time step instead would be a subtle bug, since the backward layer has only seen one day at that point.
+
+For volatility, the baselines were persistence (tomorrow's move equals today's) and a GARCH(1,1) model \cite{bollerslev1986} fitted on training returns and rolled forward through later years with fixed parameters. Its persistence parameter $\alpha+\beta$ was 0.908.
+
+All networks used the training setup from the proposal: Adam \cite{kingma2015} with a learning rate of $10^{-3}$, batches of 64, up to 100 epochs, early stopping after 10 epochs without validation improvement, halving the learning rate after 5, and gradient clipping at norm 1.0. Every model was trained with five fixed seeds (0 to 4), and results are given as the mean and standard deviation over seeds.

@@ -1,0 +1,42 @@
+\section{Data}\label{sec:data}
+
+\subsection{Sources and features}
+
+All data is daily and in US dollars. Prices and volumes for Bitcoin (BTC-USD), Ethereum, the S\&P 500, gold futures, the US dollar index and the VIX came from Yahoo Finance through the \texttt{yfinance} package. Six on-chain series came from the Blockchain.com Charts API: active addresses, hash rate, transaction count, mempool size, miner revenue and mining difficulty. The raw fetch covers 2018 to 2025. After the 30-day warm-up needed by the longest rolling feature, the usable data starts on 12 February 2018, slightly later than the 1 January start stated in the proposal.
+
+Stock-market series only trade on US business days while Bitcoin trades every day. To have every feature observed at every decision step, weekend rows were dropped, so the models see a five-day week. US public holidays (about ten a year) were forward-filled from the previous close. On-chain values were kept as observed.
+
+From these I built 19 features, the same set as in the proposal (\cref{app:features}). There are six daily log-returns, $r_t=\ln(P_t/P_{t-1})$, for BTC, ETH, the S\&P 500, gold, the dollar index and the VIX. There is Bitcoin's 14-day realised volatility, three 30-day rolling correlations between BTC returns and ETH, the S\&P 500 and gold, the 7-day rate of change of each of the six on-chain series, and the log trading volume of BTC, ETH and the S\&P 500. Every feature was standardised with a mean and standard deviation computed on the training years only.
+
+\subsection{Targets}
+
+Each row has three targets, all for the next trading day. The Alpha Agent predicts the log-return $r_{t+1}$. The Beta Agent predicts the size of the move $|r_{t+1}|$, and whether day $t+1$ is a jump, meaning its absolute return is more than three standard deviations of the previous 30 days' returns \cite{chen2021jump}. Jumps are rare. They make up 2.48\% of all days, 2.67\% of the training and validation years and only 1.15\% of 2025.
+
+The proposal used Bitcoin's 14-day realised volatility at $t+1$ as the volatility target. That target was dropped for the single-day size $|r_{t+1}|$, for reasons explained in \cref{sec:vol-target}.
+
+\subsection{Splits}
+
+The data was split by date with no shuffling (\cref{tab:splits}). The training years cover the 2018 bear market, the March 2020 crash, the 2021 bull run, the 2022 collapse and the 2023 recovery. 2024 was used for early stopping, calibration and tuning, and 2025 for the reported test. Because some design choices were made after seeing 2025 results (\cref{sec:discussion}), I also ran the finished system on 2026 data, from 1 January to 30 September, fetched after everything else was frozen. Nothing was retrained or retuned for it.
+
+\begin{table}[!t]
+  \centering
+  \caption{Chronological data splits}
+  \label{tab:splits}
+  \footnotesize
+  \begin{tabularx}{\columnwidth}{@{}llX@{}}
+    \toprule
+    Split & Period & Used for \\
+    \midrule
+    Training   & Feb 2018 to Dec 2023 & fitting all models \\
+    Validation & 2024 & early stopping, calibration, tuning \\
+    Test       & 2025 & reported results \\
+    Forward    & Jan to Sep 2026 & untouched check, nothing retuned \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Data checks}
+
+Getting the data right took more effort than I expected. Early on, the fetch script ran without errors but returned prices that were not real. The BTC and ETH returns had a correlation of about 0.01 instead of the expected 0.8, and Bitcoin's price on its all-time-high date was off by a factor of five. No automated check caught this. It was caught by comparing against known historical prices, and a second fetch returned genuine data. Several smaller problems also turned up. The \texttt{yfinance} end date is exclusive, so every series silently lost its last day. The Blockchain.com API thins out long date ranges unless asked not to, returning 729 points instead of about 2,900. And the S\&P 500 reported zero volume on one day, which broke the log-volume feature.
+
+To guard against look-ahead bias I wrote a leakage audit with nine checks, for example that the scaler only saw training data, that no target uses same-day information and that no input window crosses a split boundary. All nine pass. A separate mutation test plants six deliberate leaks in a copy of the data and confirms the audit catches every one. Finally, the raw and processed data were frozen with SHA-256 checksums and tagged in git (\texttt{data-freeze-2026-10-07}), so every number in this paper can be traced back to the same bytes. When the 2026 data was fetched, I checked its overlapping 2018 to 2025 values against the frozen copy. Eleven of the twelve market and on-chain series matched exactly, and gold differed by about 0.1\% because of futures roll adjustments.
